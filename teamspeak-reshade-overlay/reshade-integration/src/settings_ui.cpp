@@ -293,8 +293,15 @@ void SettingsUi::tab_general(Config& config, SettingsActions& actions) {
 
     ImGui::SeparatorText("Preview");
     ImGui::Checkbox("Show the overlay using example data", &preview_active_);
-    help("Draws the HUD from fixed sample users so you can see every indicator at once. It does "
-         "not create TeamSpeak events and does not change your real state.");
+    help("Draws the HUD from fixed sample users so you can see every indicator at once, plus one "
+         "of every notification type and a sample chat feed, so you can see where each piece "
+         "lands. It does not create TeamSpeak events and does not change your real state.");
+    if (preview_active_) {
+        ImGui::TextDisabled("Showing sample users, every notification type and a sample chat "
+                            "feed. A notification type you have switched off simply does not "
+                            "appear. The chat panel is shown even if you have it hidden, so you "
+                            "can position it.");
+    }
 
     ImGui::SeparatorText("Settings");
     if (ImGui::Checkbox("Show every setting", &config.general.advanced_settings)) {
@@ -329,8 +336,17 @@ void SettingsUi::tab_appearance(Config& config, SettingsActions& actions) {
 
     actions.config_changed |= ImGui::SliderFloat("Size", &a.font_size, 6.0f, 72.0f, "%.0f px");
     actions.config_changed |= colour_edit("Text colour", a.text_default);
-    actions.config_changed |= ImGui::Checkbox("Drop shadow", &a.text_shadow);
-    help("Keeps light text readable over bright game content. Strongly recommended.");
+    actions.config_changed |= ImGui::Checkbox("Outline the text", &a.text_outline);
+    help("Draws a full outline around every glyph. Costs a little more than a drop shadow but "
+         "stays readable over any background, not just most of them.");
+    if (a.text_outline) {
+        actions.config_changed |= colour_edit("Outline colour", a.text_outline_color);
+        actions.config_changed |=
+            ImGui::SliderFloat("Outline thickness", &a.text_outline_thickness, 0.5f, 4.0f, "%.1f px");
+    } else {
+        actions.config_changed |= ImGui::Checkbox("Drop shadow", &a.text_shadow);
+        help("Cheaper than an outline and usually enough. Ignored while Outline is on.");
+    }
 
     ImGui::SeparatorText("Spacing");
     actions.config_changed |= ImGui::SliderFloat("Line height", &a.row_height, 8.0f, 60.0f, "%.0f px");
@@ -665,7 +681,32 @@ void SettingsUi::tab_indicators(Config& config, SettingsActions& actions) {
         actions.config_changed |= compact_state_editor("Whispering to you", i.whispering, true);
         actions.config_changed |= compact_state_editor("Microphone muted", i.mic_muted, true);
         actions.config_changed |= compact_state_editor("Speakers muted", i.speaker_muted, true);
-        actions.config_changed |= compact_state_editor("Channel Commander", i.commander, true);
+
+        ImGui::Spacing();
+        ImGui::SeparatorText("Channel Commander");
+        actions.config_changed |= ImGui::Checkbox("Show Channel Commander", &i.commander.enabled);
+        if (i.commander.enabled) {
+            // Circle, name colour, or both -- asked for explicitly, and clearer as one choice
+            // than as two unrelated checkboxes.
+            int mode = i.commander.show_icon ? (i.commander.override_text_color ? 2 : 0) : 1;
+            static const char* kModes[] = {"Circle beside the name", "Colour the name",
+                                           "Circle and colour"};
+            if (ImGui::Combo("How to show it", &mode, kModes, 3)) {
+                i.commander.show_icon = (mode != 1);
+                i.commander.override_text_color = (mode != 0);
+                actions.config_changed = true;
+            }
+            if (i.commander.show_icon) {
+                actions.config_changed |= enum_combo("Shape", i.commander.icon, kIcons);
+                actions.config_changed |= ImGui::SliderFloat("Circle size", &i.commander.icon_scale,
+                                                             0.2f, 3.0f, "x%.2f");
+                actions.config_changed |= colour_edit("Circle colour", i.commander.icon_color);
+            }
+            if (i.commander.override_text_color) {
+                actions.config_changed |= colour_edit("Name colour", i.commander.text_color);
+            }
+        }
+        ImGui::Spacing();
         actions.config_changed |= compact_state_editor("Away", i.away, true);
         actions.config_changed |= compact_state_editor("Recording", i.recording, true);
         ImGui::Spacing();
@@ -716,6 +757,14 @@ void SettingsUi::tab_notifications(Config& config, SettingsActions& actions) {
     actions.config_changed |= ImGui::Checkbox("Merge identical notifications", &n.merge_duplicates);
     actions.config_changed |= ImGui::SliderInt("Ignore joins for (ms) after connecting",
                                                &n.suppress_after_connect_ms, 0, 15000);
+    ImGui::SeparatorText("Box");
+    actions.config_changed |= ImGui::SliderFloat("Width", &n.width, 120.0f, 900.0f, "%.0f px");
+    actions.config_changed |= ImGui::SliderFloat("Padding across", &n.padding_x, 0.0f, 40.0f, "%.0f px");
+    actions.config_changed |= ImGui::SliderFloat("Padding down", &n.padding_y, 0.0f, 40.0f, "%.0f px");
+    help("Notifications have their own padding: the user list is often set to zero, which would "
+         "otherwise put toast text hard against its own border.");
+    actions.config_changed |= ImGui::SliderFloat("Minimum height", &n.min_height, 12.0f, 120.0f, "%.0f px");
+    ImGui::TextDisabled("Message text is clipped to the box; it cannot overflow.");
     help("Stops a burst of join notifications when you connect to a channel that already has "
          "people in it.");
 
@@ -735,6 +784,19 @@ void SettingsUi::tab_notifications(Config& config, SettingsActions& actions) {
 
 void SettingsUi::tab_chat(Config& config, SettingsActions& actions) {
     ChatConfig& c = config.chat;
+
+    // Visibility first: with it off nothing is drawn *and* nothing is even requested from the
+    // plugin, which makes the whole tab look broken rather than switched off.
+    if (ImGui::Checkbox("Show the chat feed", &c.placement.visible)) {
+        actions.config_changed = true;
+        actions.subscription_changed = true;
+    }
+    if (!c.placement.visible) {
+        ImGui::TextDisabled("The chat feed is hidden. While it is off, TeamSpeak is not asked to "
+                            "send messages at all.");
+    } else {
+        actions.config_changed |= placement_editor("Chat position", c.placement);
+    }
     ImGui::SeparatorText("What to show");
     ImGui::TextDisabled(
         "Messages are only sent to the overlay for the categories enabled here. A category that "

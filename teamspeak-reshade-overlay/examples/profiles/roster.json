@@ -101,7 +101,17 @@
     "whisper": { "enabled": false },
     "chat": { "enabled": false }
   },
-  "chat": { "placement": { "visible": false } },
+  "chat": {
+    "placement": { "visible": true, "anchor": "bottom_left", "x": 20, "y": 20, "align": "left" },
+    "show_channel_messages": true,
+    "show_server_messages": false,
+    "show_private_messages": false,
+    "max_visible_messages": 6,
+    "show_timestamp": true,
+    "show_sender": true,
+    "show_background": true,
+    "width": 420
+  },
   "animation": {
     "enabled": true,
     "speaking": "color_fade",

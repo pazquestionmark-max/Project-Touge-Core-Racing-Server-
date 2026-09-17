@@ -51,6 +51,14 @@ public:
                        std::int64_t now_ms);
 
     void note_connected(std::int64_t now_ms) { notifications_.note_connected(now_ms); }
+
+    /// Fills the notification queue with one of every kind, for the settings preview, so the
+    /// user can see where each type lands and how it is styled without waiting for the events to
+    /// happen for real. Uses the same formatting and lifecycle path as live notifications --
+    /// it is the real pipeline fed sample events, not a separate mock renderer.
+    void seed_preview_notifications(const Config& config, std::int64_t now_ms);
+    /// True once every seeded notification has aged out, so the caller can re-seed.
+    bool notifications_empty() const noexcept { return notifications_.items().empty(); }
     void invalidate() { layout_dirty_ = true; }
     void clear_notifications() { notifications_.clear(); }
 

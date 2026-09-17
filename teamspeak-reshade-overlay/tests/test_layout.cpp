@@ -633,3 +633,96 @@ TEST(layout, a_linked_group_stays_anchored_at_every_resolution) {
         CHECK(r.users.rect.y > r.title.rect.y);
     }
 }
+
+// --- a long channel name must never leave the screen -------------------------------------------
+
+TEST(layout, a_long_channel_title_is_clamped_instead_of_running_off_screen) {
+    // Regression: "Parole Administrator I Aubrey Huy" ran past the right edge and was cut off by
+    // the screen rather than by the layout.
+    Config cfg = Config::defaults();
+    cfg.group.enabled = true;
+    cfg.group.anchor = Anchor::TopRight;
+    cfg.group.x = 16.0f;
+    cfg.channel_title.show_parent = false;
+    cfg.channel_title.show_user_count = false;
+
+    OverlayState state = connected_state({make_user("a=", "Alice")});
+    state.channel.name =
+        "Parole Administrator I Aubrey Huy -> Division of Adult Parole Operations and then some";
+
+    // At 1920 that name still fits, and must be drawn in full rather than needlessly cut.
+    const LayoutResult wide =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+    CHECK(wide.title.visible);
+    CHECK(wide.title.rect.x >= -0.01f);
+    CHECK(wide.title.rect.right() <= 1920.0f + 0.01f);
+    CHECK_EQ(wide.title.text, state.channel.name);
+
+    // On a narrow viewport the same name cannot fit, so it must be ellipsised -- and still be
+    // fully on screen, which is the part that was broken.
+    const LayoutResult narrow =
+        compute_layout(state, cfg, Viewport{640, 480}, stub_measure(), 0.0f, nullptr);
+    CHECK(narrow.title.rect.x >= -0.01f);
+    CHECK(narrow.title.rect.right() <= 640.0f + 0.01f);
+    CHECK(narrow.title.text.size() < state.channel.name.size());
+    CHECK(narrow.title.text.find("\xE2\x80\xA6") != std::string::npos);  // U+2026
+}
+
+TEST(layout, an_explicit_title_width_is_respected) {
+    Config cfg = Config::defaults();
+    cfg.channel_title.max_width = 120.0f;
+    cfg.channel_title.show_parent = false;
+    cfg.channel_title.show_user_count = false;
+
+    OverlayState state = connected_state({});
+    state.channel.name = std::string(200, 'W');
+
+    const LayoutResult r =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+    // Width is the fitted text plus chrome, so it tracks the cap rather than the raw name.
+    CHECK(r.title.rect.w <= 120.0f + cfg.appearance.padding_x * 2.0f + 1.0f);
+}
+
+TEST(layout, a_right_anchored_title_keeps_its_right_edge_as_names_change_length) {
+    // The fixed point on the right must stay fixed: the block grows leftward, it does not creep
+    // towards the edge and then get clipped.
+    Config cfg = Config::defaults();
+    cfg.group.enabled = true;
+    cfg.group.anchor = Anchor::TopRight;
+    cfg.group.x = 20.0f;
+    cfg.channel_title.show_parent = false;
+    cfg.channel_title.show_user_count = false;
+
+    float right_edge = -1.0f;
+    for (const char* name : {"282T/M1", "Parole Administrator I Aubrey Huy",
+                             "A", "Division of Adult Parole Operations"}) {
+        OverlayState state = connected_state({make_user("a=", "Alice")});
+        state.channel.name = name;
+        const LayoutResult r =
+            compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+        const float edge = std::max(r.title.rect.right(), r.users.rect.right());
+        if (right_edge < 0.0f) right_edge = edge;
+        CHECK_NEAR(edge, right_edge, 0.01f);
+        CHECK(r.title.rect.x >= -0.01f);
+    }
+}
+
+TEST(layout, the_group_never_leaves_the_viewport_even_when_over_wide) {
+    Config cfg = Config::defaults();
+    cfg.group.enabled = true;
+    cfg.group.anchor = Anchor::TopRight;
+    cfg.user_list.max_name_width = 4000.0f;  // deliberately absurd
+
+    std::vector<UserState> users;
+    for (int i = 0; i < 6; ++i) {
+        users.push_back(make_user(("u" + std::to_string(i) + "=").c_str(),
+                                  std::string(180, 'M').c_str()));
+    }
+    const OverlayState state = connected_state(users);
+    const LayoutResult r =
+        compute_layout(state, cfg, Viewport{1280, 720}, stub_measure(), 0.0f, nullptr);
+
+    CHECK(r.users.rect.x >= -0.01f);
+    CHECK(r.title.rect.x >= -0.01f);
+    CHECK(r.users.rect.y >= -0.01f);
+}

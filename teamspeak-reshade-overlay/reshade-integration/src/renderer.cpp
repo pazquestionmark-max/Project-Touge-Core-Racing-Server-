@@ -197,6 +197,52 @@ std::vector<ChatMessage> preview_chat() {
     return messages;
 }
 
+void Renderer::seed_preview_notifications(const Config& config, std::int64_t now_ms) {
+    notifications_.clear();
+    // Zero disables the post-connect suppression window, which would otherwise swallow the
+    // sample joins and leaves exactly as it does real ones just after connecting.
+    notifications_.note_connected(0);
+
+    const auto event = [&](OverlayEventKind kind, const char* name, const char* uid) {
+        OverlayEvent e;
+        e.kind = kind;
+        e.display_name = name;
+        e.unique_id = uid;
+        e.channel_name = "Racing #1";
+        e.previous_channel_name = "Lobby";
+        e.user_count = 4;
+        e.timestamp_ms = now_ms;
+        return e;
+    };
+
+    notifications_.submit(event(OverlayEventKind::UserJoined, "Alice", "preview-a="), config,
+                          now_ms);
+    notifications_.submit(event(OverlayEventKind::UserLeft, "Bob", "preview-b="), config, now_ms);
+    notifications_.submit(event(OverlayEventKind::ChannelChanged, "", ""), config, now_ms);
+
+    OverlayEvent connected = event(OverlayEventKind::ConnectionChanged, "", "");
+    connected.connection = ConnectionState::Connected;
+    notifications_.submit(connected, config, now_ms);
+    // note_connected fires again inside submit for a Connected event; undo it so the joins above
+    // are not suppressed on the next re-seed.
+    notifications_.note_connected(0);
+
+    notifications_.submit(event(OverlayEventKind::WhisperStarted, "Frank", "preview-f="), config,
+                          now_ms);
+
+    OverlayEvent chat = event(OverlayEventKind::ChatMessage, "Alice", "preview-a=");
+    chat.chat.category = ChatCategory::Channel;
+    chat.chat.sender_name = "Alice";
+    chat.chat.sender_unique_id = "preview-a=";
+    chat.chat.text = "Example chat notification";
+    chat.chat.timestamp_ms = now_ms;
+    notifications_.submit(chat, config, now_ms);
+
+    // Anything disabled in the configuration produces nothing, which is itself useful feedback:
+    // an empty slot means that category is switched off, not that the preview is broken.
+    notifications_.drain_sounds();  // never play sounds for a preview
+}
+
 void Renderer::submit_events(const std::vector<OverlayEvent>& events, const Config& config,
                              std::int64_t now_ms) {
     for (const OverlayEvent& event : events) {
@@ -217,7 +263,18 @@ void Renderer::draw_text(ImDrawList* dl, const Config& config, float x, float y,
     if (font == nullptr) return;
     const char* begin = text.data();
     const char* end = text.data() + text.size();
-    if (config.appearance.text_shadow) {
+
+    // An outline is eight extra draws, so it is opt-in -- but unlike a one-sided shadow it stays
+    // readable over *any* background rather than most of them.
+    if (config.appearance.text_outline && config.appearance.text_outline_thickness > 0.0f) {
+        const float t = config.appearance.text_outline_thickness;
+        const std::uint32_t outline = config.appearance.text_outline_color.to_abgr();
+        static constexpr float kOffsets[8][2] = {{-1, -1}, {0, -1}, {1, -1}, {-1, 0},
+                                                 {1, 0},   {-1, 1}, {0, 1},  {1, 1}};
+        for (const auto& o : kOffsets) {
+            dl->AddText(font, size, ImVec2(x + o[0] * t, y + o[1] * t), outline, begin, end);
+        }
+    } else if (config.appearance.text_shadow) {
         // A one-pixel drop shadow is what keeps light text readable over bright game content,
         // which is the difference between usable and not on a snow map or a white car.
         const float offset = config.appearance.text_shadow_offset;
@@ -384,10 +441,12 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
     const float scale = config.general.scale;
     const float width = nc.width * scale;
     const float font = config.appearance.font_size * scale;
-    const float pad_x = config.appearance.padding_x * scale;
-    const float pad_y = config.appearance.padding_y * scale * 0.6f;
+    // Notifications carry their own padding. appearance.padding_* belongs to the user list,
+    // which legitimately runs at zero, and borrowing it put toast text hard against its border.
+    const float pad_x = nc.padding_x * scale;
+    const float pad_y = nc.padding_y * scale;
     const float icon = config.appearance.icon_size * scale;
-    const float gap = config.user_list.indicator_gap * scale;
+    const float gap = std::max(4.0f, config.user_list.indicator_gap * scale);
     const float height = std::max(nc.min_height * scale, font + pad_y * 2.0f);
     const float spacing = nc.spacing * scale;
 
@@ -395,6 +454,8 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
     const float stack_height =
         static_cast<float>(count) * height + static_cast<float>(count - 1) * spacing;
     const Rect area = resolve_placement(nc.placement, width, stack_height, viewport);
+
+    const MeasureFn measure = [](std::string_view t, float size) { return measure_text(t, size); };
 
     std::size_t index = 0;
     for (const Notification& notification : notifications_.items()) {
@@ -416,45 +477,58 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
 
         float x = area.x + pad_x;
         const float centre_y = y + height * 0.5f;
+        const float text_top = centre_y - font * 0.5f;
+
         if (notification.icon != IconShape::None) {
             draw_icon(dl, notification.icon, x + icon * 0.5f, centre_y, icon,
                       packed(notification.icon_color, alpha), 1.5f * scale);
             x += icon + gap;
         }
         if (!notification.prefix.empty()) {
-            draw_text(dl, config, x, centre_y - font * 0.5f, font,
-                      packed(notification.icon_color, alpha), notification.prefix);
-            x += measure_text(notification.prefix, font) + gap * 0.5f;
+            draw_text(dl, config, x, text_top, font, packed(notification.icon_color, alpha),
+                      notification.prefix);
+            x += measure_text(notification.prefix, font) + gap;
+        }
+
+        // Whatever space is left after the icon and prefix is the budget for the message. The
+        // message is fitted to it, so it can never run past the panel -- previously it simply
+        // kept drawing and spilled out of the box and over the prefix.
+        float remaining = (area.x + width - pad_x) - x;
+        if (remaining <= 8.0f) {
+            ++index;
+            continue;
         }
 
         // The sender's name is drawn in its own colour, the rest of the line in the body colour.
         const std::size_t name_pos =
             notification.name.empty() ? std::string::npos
                                       : notification.text.find(notification.name);
+
+        const auto draw_segment = [&](std::string_view segment, std::uint32_t colour) {
+            if (segment.empty() || remaining <= 4.0f) return;
+            const FittedText fitted =
+                fit_text(segment, remaining, font, OverflowMode::Ellipsis, 0.75f, measure);
+            draw_text(dl, config, x, text_top, font, colour, fitted.text);
+            const float used = measure_text(fitted.text, font);
+            x += used;
+            remaining -= used;
+        };
+
         if (name_pos == std::string::npos) {
-            draw_text(dl, config, x, centre_y - font * 0.5f, font,
-                      packed(notification.text_color, alpha), notification.text);
+            draw_segment(notification.text, packed(notification.text_color, alpha));
         } else {
-            const std::string_view before(notification.text.data(), name_pos);
-            const std::string_view after(notification.text.data() + name_pos +
-                                             notification.name.size(),
-                                         notification.text.size() - name_pos -
-                                             notification.name.size());
-            draw_text(dl, config, x, centre_y - font * 0.5f, font,
-                      packed(notification.text_color, alpha), before);
-            x += measure_text(before, font);
-            draw_text(dl, config, x, centre_y - font * 0.5f, font,
-                      packed(notification.name_color, alpha), notification.name);
-            x += measure_text(notification.name, font);
-            draw_text(dl, config, x, centre_y - font * 0.5f, font,
-                      packed(notification.text_color, alpha), after);
-            x += measure_text(after, font);
+            const std::string_view whole(notification.text);
+            draw_segment(whole.substr(0, name_pos), packed(notification.text_color, alpha));
+            draw_segment(whole.substr(name_pos, notification.name.size()),
+                         packed(notification.name_color, alpha));
+            draw_segment(whole.substr(name_pos + notification.name.size()),
+                         packed(notification.text_color, alpha));
         }
 
         if (notification.repeat_count > 1) {
             text_scratch_ = "x" + std::to_string(notification.repeat_count);
-            draw_text(dl, config, area.x + width - pad_x - measure_text(text_scratch_, font),
-                      centre_y - font * 0.5f, font,
+            const float w = measure_text(text_scratch_, font);
+            draw_text(dl, config, area.x + width - pad_x - w, text_top, font,
                       packed(config.appearance.text_secondary, alpha), text_scratch_);
         }
         ++index;

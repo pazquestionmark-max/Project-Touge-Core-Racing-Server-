@@ -451,9 +451,25 @@ LayoutResult compute_layout(const OverlayState& state, const Config& cfg, const 
         const float title_pad_y = cfg.appearance.padding_y * title_s;
         const float title_icon = cfg.appearance.icon_size * title_s;
         const float title_gap = cfg.user_list.indicator_gap * title_s;
+        // Cap the title's width. Without this a long channel name simply keeps growing and
+        // runs off whichever edge the overlay is anchored to -- which is what happened with
+        // "Parole Administrator I Aubrey Huy". With a cap, a right-anchored title keeps its
+        // right edge pinned and grows leftward until it hits the limit, then ellipsises.
+        const float chrome = title_pad_x * 2.0f +
+                             (tc.icon != IconShape::None ? title_icon + title_gap : 0.0f);
+        // An explicit max_width wins; otherwise allow the viewport minus a margin on each side,
+        // so the title can be long but can never leave the screen.
+        const float screen_limit = std::max(60.0f, vp.width * 0.9f - chrome);
+        const float limit = tc.max_width > 0.0f
+                                ? std::min(tc.max_width * title_s, screen_limit)
+                                : screen_limit;
+
+        const FittedText fitted =
+            fit_text(text, limit, title_font, OverflowMode::Ellipsis, 0.75f, measure);
+        text = fitted.text;
+
         const float text_w = measure ? measure(text, title_font) : 0.0f;
-        const float w = text_w + title_pad_x * 2.0f +
-                        (tc.icon != IconShape::None ? title_icon + title_gap : 0.0f);
+        const float w = text_w + chrome;
         const float h = title_font + title_pad_y * 2.0f;
 
         out.title.visible = true;
@@ -543,7 +559,14 @@ LayoutResult compute_layout(const OverlayState& state, const Config& cfg, const 
                                        out.users.visible ? out.users.rect.w : 0.0f);
         const float block_h = title_h + gap_h + list_h;
 
-        const Rect block = resolve_placement(group_placement, block_w, block_h, vp);
+        Rect block = resolve_placement(group_placement, block_w, block_h, vp);
+        // Right-anchored means the right edge is the fixed point: content grows leftward. Clamp
+        // so the block can never be pushed past either edge of the screen, whichever way it
+        // grew.
+        if (block.right() > vp.width) block.x = vp.width - block.w;
+        if (block.x < 0.0f) block.x = 0.0f;
+        if (block.bottom() > vp.height) block.y = vp.height - block.h;
+        if (block.y < 0.0f) block.y = 0.0f;
 
         // Each block keeps its own width but is aligned inside the group box, so a short title
         // over a wide list stays flush with whichever edge the group is anchored to.

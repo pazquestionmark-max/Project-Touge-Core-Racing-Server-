@@ -59,6 +59,10 @@ struct AddonState {
 
     tsro::OverlayState preview;
     std::vector<tsro::ChatMessage> preview_chat;
+    /// A copy of `config` with the chat feed forced visible, used only while previewing: the
+    /// whole point is to show where every piece sits, and a hidden chat panel shows nothing.
+    tsro::Config preview_config;
+    bool preview_was_active = false;
     std::atomic<bool> started{false};
     std::string profile_name = "default";
 };
@@ -169,13 +173,29 @@ void on_reshade_overlay(reshade::api::effect_runtime* runtime) {
     state->renderer.submit_events(events, state->config, now);
 
     const bool preview = state->settings.preview_active();
-    if (preview && state->preview.users.empty()) {
-        state->preview = tsro::overlay::preview_state();
-        state->preview_chat = tsro::overlay::preview_chat();
-    }
+    if (preview) {
+        if (state->preview.users.empty()) {
+            state->preview = tsro::overlay::preview_state();
+            state->preview_chat = tsro::overlay::preview_chat();
+        }
+        // Rebuild on entry and whenever the configuration changed, so edits are reflected.
+        state->preview_config = state->config;
+        state->preview_config.chat.placement.visible = true;
 
-    state->renderer.draw(draw_list, state->config, frame, viewport, now,
-                         preview ? &state->preview : nullptr,
+        // Seed on entry, and again once the samples have aged out, so the preview keeps showing
+        // every notification type instead of emptying after a few seconds.
+        if (!state->preview_was_active || state->renderer.notifications_empty()) {
+            state->renderer.seed_preview_notifications(state->preview_config, now);
+        }
+    } else if (state->preview_was_active) {
+        // Leaving preview must not leave sample notifications on screen.
+        state->renderer.clear_notifications();
+        state->renderer.note_connected(now);
+    }
+    state->preview_was_active = preview;
+
+    state->renderer.draw(draw_list, preview ? state->preview_config : state->config, frame,
+                         viewport, now, preview ? &state->preview : nullptr,
                          preview ? &state->preview_chat : nullptr);
 }
 

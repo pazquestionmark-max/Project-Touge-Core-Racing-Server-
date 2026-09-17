@@ -380,6 +380,9 @@ json::Value Config::to_json() const {
         o.set("text_shadow", json::Value(a.text_shadow));
         o.set("text_shadow_color", json::Value(a.text_shadow_color.to_hex()));
         o.set("text_shadow_offset", json::Value(a.text_shadow_offset));
+        o.set("text_outline", json::Value(a.text_outline));
+        o.set("text_outline_color", json::Value(a.text_outline_color.to_hex()));
+        o.set("text_outline_thickness", json::Value(a.text_outline_thickness));
         o.set("text_default", json::Value(a.text_default.to_hex()));
         o.set("text_secondary", json::Value(a.text_secondary.to_hex()));
         o.set("accent", json::Value(a.accent.to_hex()));
@@ -416,6 +419,7 @@ json::Value Config::to_json() const {
         o.set("show_border", json::Value(c.show_border));
         o.set("icon", json::Value(to_string(c.icon)));
         o.set("icon_color", json::Value(c.icon_color.to_hex()));
+        o.set("max_width", json::Value(c.max_width));
         o.set("format", json::Value(c.format));
         o.set("parent_format", json::Value(c.parent_format));
         o.set("disconnected_text", json::Value(c.disconnected_text));
@@ -465,6 +469,8 @@ json::Value Config::to_json() const {
         o.set("spacing", json::Value(n.spacing));
         o.set("width", json::Value(n.width));
         o.set("min_height", json::Value(n.min_height));
+        o.set("padding_x", json::Value(n.padding_x));
+        o.set("padding_y", json::Value(n.padding_y));
         o.set("merge_duplicates", json::Value(n.merge_duplicates));
         o.set("suppress_after_connect_ms", json::Value(n.suppress_after_connect_ms));
         o.set("join", write(n.join));
@@ -599,6 +605,9 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         a.b("text_shadow", x.text_shadow);
         a.col("text_shadow_color", x.text_shadow_color);
         a.f("text_shadow_offset", x.text_shadow_offset, 0.0f, 8.0f);
+        a.b("text_outline", x.text_outline);
+        a.col("text_outline_color", x.text_outline_color);
+        a.f("text_outline_thickness", x.text_outline_thickness, 0.0f, 6.0f);
         a.col("text_default", x.text_default);
         a.col("text_secondary", x.text_secondary);
         a.col("accent", x.accent);
@@ -633,6 +642,7 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         t.b("show_border", x.show_border);
         t.en("icon", x.icon);
         t.col("icon_color", x.icon_color);
+        t.f("max_width", x.max_width, 0.0f, 8192.0f);
         t.s("format", x.format, 200);
         t.s("parent_format", x.parent_format, 200);
         t.s("disconnected_text", x.disconnected_text, 120);
@@ -680,6 +690,8 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         n.f("spacing", x.spacing, 0.0f, 64.0f);
         n.f("width", x.width, 80.0f, 2000.0f);
         n.f("min_height", x.min_height, 8.0f, 400.0f);
+        n.f("padding_x", x.padding_x, 0.0f, 64.0f);
+        n.f("padding_y", x.padding_y, 0.0f, 64.0f);
         n.b("merge_duplicates", x.merge_duplicates);
         n.i("suppress_after_connect_ms", x.suppress_after_connect_ms, 0, 60000);
         read(n.sub("join"), x.join);

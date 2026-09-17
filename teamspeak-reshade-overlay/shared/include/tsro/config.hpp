@@ -177,6 +177,12 @@ struct AppearanceConfig {
     bool text_shadow = true;          ///< keeps text legible over bright game content
     Color text_shadow_color{0, 0, 0, 190};
     float text_shadow_offset = 1.0f;
+    /// A full outline rather than a one-sided shadow. Costs eight extra text draws per string,
+    /// so it is off by default, but it is the only thing that stays readable over *any*
+    /// background rather than most of them.
+    bool text_outline = false;
+    Color text_outline_color{0, 0, 0, 230};
+    float text_outline_thickness = 1.0f;
     Color text_default{230, 233, 238, 255};
     Color text_secondary{150, 156, 166, 255};
     Color accent{88, 166, 255, 255};
@@ -199,6 +205,9 @@ struct ChannelTitleConfig {
     bool show_border = false;
     IconShape icon = IconShape::None;
     Color icon_color{88, 166, 255, 255};
+    /// Widest the title may be, in unscaled pixels. 0 means "as wide as the screen allows",
+    /// which still clamps -- an unbounded title simply runs off the edge.
+    float max_width = 0.0f;
     std::string format = "{channel}";
     std::string parent_format = "{parent} / {channel}";
     std::string disconnected_text = "TeamSpeak: not connected";
@@ -247,6 +256,9 @@ struct NotificationsConfig {
     float spacing = 6.0f;
     float width = 280.0f;
     float min_height = 26.0f;
+    /// Independent of appearance.padding_*, which the user list may legitimately set to zero.
+    float padding_x = 10.0f;
+    float padding_y = 6.0f;
     bool merge_duplicates = true;
     /// Events arriving within this window of a (re)connection are absorbed into the initial
     /// synchronisation instead of producing a burst of join notifications.
