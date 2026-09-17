@@ -465,7 +465,10 @@ TEST(state_store, a_new_hello_resets_sequence_tracking) {
     Harness h;
     h.hello();
     h.snapshot({user(1, "a=", "Alice")});
-    h.send_raw(MessageType::UserJoined, 50, encode(UserJoinedPayload{user(2, "b=", "Bob"), JoinCause::Moved}));
+    UserJoinedPayload joined;
+    joined.user = user(2, "b=", "Bob");
+    joined.cause = JoinCause::Moved;
+    h.send_raw(MessageType::UserJoined, 50, encode(joined));
 
     h.seq = 0;
     h.hello();

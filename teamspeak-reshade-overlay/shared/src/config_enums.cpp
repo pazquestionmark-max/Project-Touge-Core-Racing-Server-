@@ -155,7 +155,9 @@ bool parse_enum(std::string_view s, NotificationBorder& o) noexcept {
 std::optional<Color> Color::from_hex(std::string_view s) {
     if (!s.empty() && s.front() == '#') s.remove_prefix(1);
     if (s.size() != 3 && s.size() != 4 && s.size() != 6 && s.size() != 8) return std::nullopt;
-    int d[8];
+    // Zeroed so the compiler can see every element is defined on all paths: the loop fills only
+    // s.size() of them, which it cannot always prove is enough for the reads below.
+    int d[8] = {};
     for (std::size_t i = 0; i < s.size(); ++i) {
         d[i] = hex_digit(s[i]);
         if (d[i] < 0) return std::nullopt;
