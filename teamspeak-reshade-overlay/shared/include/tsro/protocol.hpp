@@ -111,12 +111,18 @@ struct ChannelChangedPayload {
 struct UserJoinedPayload {
     UserState user;
     JoinCause cause = JoinCause::Moved;
+    /// The channel they came from, when we could see it. Empty when they joined the server
+    /// outright or arrived from a channel we are not subscribed to.
+    std::string from_channel_name;
 };
 
 struct UserLeftPayload {
     UserState user;
     JoinCause cause = JoinCause::Moved;
     std::uint64_t to_channel_id = 0;
+    /// Where they went, when we could see it. Empty when they left the server or moved to a
+    /// channel we are not subscribed to.
+    std::string to_channel_name;
 };
 
 struct UserUpdatedPayload {

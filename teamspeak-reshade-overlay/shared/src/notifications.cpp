@@ -83,6 +83,16 @@ void NotificationQueue::submit(const OverlayEvent& ev, const Config& cfg, std::i
     fv.name = ev.display_name;
     fv.channel = ev.channel_name;
     fv.previous = ev.previous_channel_name;
+    // The other end of a move is not always visible: someone can arrive from a channel we are
+    // not subscribed to, or join the server outright. The message still has to read as English,
+    // so the placeholder falls back to a phrase rather than leaving a hole in the sentence.
+    if (fv.previous.empty() &&
+        (ev.kind == OverlayEventKind::UserJoined || ev.kind == OverlayEventKind::UserLeft)) {
+        const bool server_edge = ev.cause == JoinCause::Connected ||
+                                 ev.cause == JoinCause::Disconnected ||
+                                 ev.cause == JoinCause::Timeout;
+        fv.previous = server_edge ? "the server" : "elsewhere";
+    }
     fv.count = to_str(ev.user_count);
 
     switch (ev.kind) {
@@ -123,8 +133,28 @@ void NotificationQueue::submit(const OverlayEvent& ev, const Config& cfg, std::i
 
     Notification n;
     n.kind = kind;
-    n.text = format_template(st.format, fv);
+    std::vector<FormatSpan> spans;
+    n.text = format_template(st.format, fv, spans);
     n.name = fv.name;
+    if (st.color_placeholders) {
+        n.highlights.reserve(spans.size());
+        for (const FormatSpan& span : spans) {
+            Color colour = st.name_color;
+            switch (span.field) {
+                case FormatField::Name: colour = st.name_color; break;
+                case FormatField::Channel:
+                case FormatField::Parent: colour = st.channel_color; break;
+                case FormatField::Previous: colour = st.previous_color; break;
+                case FormatField::Count: colour = st.count_color; break;
+                case FormatField::Status: colour = st.status_color; break;
+                case FormatField::Message: colour = st.message_color; break;
+                case FormatField::Server:
+                case FormatField::Time:
+                case FormatField::None: colour = st.text; break;
+            }
+            n.highlights.push_back(Notification::Highlight{span.begin, span.end, colour});
+        }
+    }
     n.prefix = st.prefix;
     n.name_color = st.name_color;
     n.text_color = st.text;
@@ -145,7 +175,15 @@ void NotificationQueue::submit(const OverlayEvent& ev, const Config& cfg, std::i
     // Per-user colour overrides apply to the name inside notifications too, so a user who is
     // always cyan in the list is also cyan in their join message.
     if (const UserOverride* ov = cfg.find_user_override(ev.unique_id)) {
-        if (ov->name_color) n.name_color = *ov->name_color;
+        if (ov->name_color) {
+            n.name_color = *ov->name_color;
+            for (Notification::Highlight& h : n.highlights) {
+                if (h.begin < n.text.size() && n.text.compare(h.begin, h.end - h.begin,
+                                                              fv.name) == 0) {
+                    h.color = *ov->name_color;
+                }
+            }
+        }
     }
 
     if (nc.merge_duplicates && !items_.empty()) {

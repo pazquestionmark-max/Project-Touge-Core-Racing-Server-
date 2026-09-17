@@ -13,6 +13,7 @@ OverlayEvent join_event(const char* name, std::int64_t ts) {
     e.unique_id = std::string(name) + "=";
     e.display_name = name;
     e.channel_name = "Racing";
+    e.previous_channel_name = "Lobby";
     e.timestamp_ms = ts;
     return e;
 }
@@ -25,7 +26,7 @@ TEST(notifications, a_join_produces_a_formatted_notification) {
     queue.submit(join_event("Alice", 1000), cfg, 1000);
 
     CHECK_EQ(queue.size(), std::size_t{1});
-    CHECK_EQ(queue.items().front().text, std::string("Alice joined Racing"));
+    CHECK_EQ(queue.items().front().text, std::string("Alice joined from Lobby"));
     CHECK_EQ(queue.items().front().prefix, std::string("[+]"));
 }
 
@@ -35,7 +36,7 @@ TEST(notifications, a_leave_uses_its_own_independent_style) {
     OverlayEvent e = join_event("Bob", 1000);
     e.kind = OverlayEventKind::UserLeft;
     queue.submit(e, cfg, 1000);
-    CHECK_EQ(queue.items().front().text, std::string("Bob left Racing"));
+    CHECK_EQ(queue.items().front().text, std::string("Bob left to Lobby"));
     CHECK_EQ(queue.items().front().prefix, std::string("[-]"));
     CHECK(queue.items().front().name_color != cfg.notifications.join.name_color);
 }
@@ -453,4 +454,62 @@ TEST(notifications, a_poke_rides_the_private_message_subscription) {
     CHECK(subscription.chat.enabled_for(ChatCategory::Poke));
     CHECK(subscription.chat.enabled_for(ChatCategory::Private));
     CHECK(!subscription.chat.enabled_for(ChatCategory::Channel));
+}
+
+TEST(notifications, a_join_names_the_channel_they_came_from) {
+    Config cfg = Config::defaults();
+    NotificationQueue q;
+    OverlayEvent e = join_event("Test", 1000);
+    e.channel_name = "123";
+    e.previous_channel_name = "321";
+    q.submit(e, cfg, 1000);
+    CHECK_EQ(q.items().front().text, std::string("Test joined from 321"));
+}
+
+TEST(notifications, an_unseen_channel_still_reads_as_a_sentence) {
+    // Someone can arrive from a channel we are not subscribed to, or join the server outright.
+    // The message must not end up with a hole where the channel should be.
+    Config cfg = Config::defaults();
+    NotificationQueue q;
+
+    OverlayEvent moved = join_event("Test", 1000);
+    moved.previous_channel_name.clear();
+    moved.cause = JoinCause::Moved;
+    q.submit(moved, cfg, 1000);
+    CHECK_EQ(q.items().front().text, std::string("Test joined from elsewhere"));
+
+    NotificationQueue q2;
+    OverlayEvent arrived = join_event("Test", 1000);
+    arrived.previous_channel_name.clear();
+    arrived.cause = JoinCause::Connected;
+    q2.submit(arrived, cfg, 1000);
+    CHECK_EQ(q2.items().front().text, std::string("Test joined from the server"));
+}
+
+TEST(notifications, each_placeholder_carries_its_own_colour) {
+    Config cfg = Config::defaults();
+    cfg.notifications.join.name_color = Color{1, 2, 3, 255};
+    cfg.notifications.join.previous_color = Color{4, 5, 6, 255};
+    NotificationQueue q;
+
+    OverlayEvent e = join_event("Test", 1000);
+    e.previous_channel_name = "321";
+    q.submit(e, cfg, 1000);
+
+    const Notification& n = q.items().front();
+    CHECK_EQ(n.highlights.size(), std::size_t{2});
+    CHECK_EQ(n.text.substr(n.highlights[0].begin, n.highlights[0].end - n.highlights[0].begin),
+             std::string("Test"));
+    CHECK_EQ(n.highlights[0].color.to_hex(), std::string("#010203FF"));
+    CHECK_EQ(n.text.substr(n.highlights[1].begin, n.highlights[1].end - n.highlights[1].begin),
+             std::string("321"));
+    CHECK_EQ(n.highlights[1].color.to_hex(), std::string("#040506FF"));
+}
+
+TEST(notifications, placeholder_colouring_can_be_switched_off) {
+    Config cfg = Config::defaults();
+    cfg.notifications.join.color_placeholders = false;
+    NotificationQueue q;
+    q.submit(join_event("Test", 1000), cfg, 1000);
+    CHECK(q.items().front().highlights.empty());
 }

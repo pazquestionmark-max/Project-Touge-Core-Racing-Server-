@@ -94,8 +94,10 @@ private:
     /// client whose unique identifier cannot be read yet has no identity to announce. Re-reading
     /// is authoritative and cannot miss anyone.
     void resync_and_report(std::uint64_t server, MoveCause cause);
-    void emit_user_joined(const UserState& user, MoveCause cause);
-    void emit_user_left(const UserState& user, MoveCause cause, std::uint64_t to_channel);
+    void emit_user_joined(const UserState& user, MoveCause cause,
+                          const std::string& from_channel_name);
+    void emit_user_left(const UserState& user, MoveCause cause, std::uint64_t to_channel,
+                        const std::string& to_channel_name);
 
     TsQuery& query_;
     PluginCoreOptions options_;

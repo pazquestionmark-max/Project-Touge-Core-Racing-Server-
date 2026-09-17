@@ -30,6 +30,14 @@ struct Notification {
     NotificationKind kind = NotificationKind::Join;
     std::string text;        ///< already formatted
     std::string name;        ///< the part drawn in name_color
+    /// Runs of `text` that came from a placeholder, each with the colour for that placeholder.
+    /// The renderer draws these in their own colour and everything between them in text_color.
+    struct Highlight {
+        std::size_t begin = 0;
+        std::size_t end = 0;
+        Color color{};
+    };
+    std::vector<Highlight> highlights;
     std::string prefix;
     Color name_color{};
     Color text_color{};

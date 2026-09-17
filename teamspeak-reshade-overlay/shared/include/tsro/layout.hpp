@@ -106,6 +106,20 @@ struct FormatValues {
 };
 std::string format_template(std::string_view tmpl, const FormatValues& v);
 
+/// Which placeholder a run of the formatted text came from, so the renderer can colour it.
+enum class FormatField { None, Name, Channel, Parent, Previous, Count, Status, Message, Server, Time };
+
+struct FormatSpan {
+    std::size_t begin = 0;   ///< byte offset into the formatted string
+    std::size_t end = 0;
+    FormatField field = FormatField::None;
+};
+
+/// Same expansion, but also records where each substituted value landed. Anything not covered by
+/// a span is literal text from the template.
+std::string format_template(std::string_view tmpl, const FormatValues& v,
+                            std::vector<FormatSpan>& spans);
+
 /// The complete frame geometry the renderer walks.
 struct ChannelTitleLayout {
     bool visible = false;

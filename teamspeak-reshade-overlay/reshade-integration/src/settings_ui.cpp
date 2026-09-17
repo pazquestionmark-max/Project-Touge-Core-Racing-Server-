@@ -240,7 +240,20 @@ bool notification_editor(const char* label, NotificationStyle& style, const char
         changed |= enum_combo("Icon", style.icon, kIcons);
         changed |= colour_edit("Icon colour", style.icon_color);
         changed |= colour_edit("Text colour", style.text);
-        changed |= colour_edit("Name colour", style.name_color);
+        changed |= ImGui::Checkbox("Colour each placeholder", &style.color_placeholders);
+        help("Colours whatever a placeholder expanded to, so a message can put the person in "
+             "one colour and the channel in another. Off draws the whole line in the text "
+             "colour.");
+        if (style.color_placeholders) {
+            changed |= colour_edit("{name} colour", style.name_color);
+            changed |= colour_edit("{channel} colour", style.channel_color);
+            changed |= colour_edit("{from} / {to} colour", style.previous_color);
+            changed |= colour_edit("{count} colour", style.count_color);
+            changed |= colour_edit("{status} colour", style.status_color);
+            changed |= colour_edit("{message} colour", style.message_color);
+        } else {
+            changed |= colour_edit("Name colour", style.name_color);
+        }
         changed |= ImGui::Checkbox("Background", &style.show_background);
         if (style.show_background) changed |= colour_edit("Background colour", style.background);
         changed |= ImGui::Checkbox("Border", &style.show_border);
@@ -809,10 +822,14 @@ void SettingsUi::tab_notifications(Config& config, SettingsActions& actions) {
         "An event line takes the width it needs and grows towards the anchored edge. Only a "
         "chat or private message wraps, and each of those has its own switch below.");
 
-    actions.config_changed |= notification_editor("Someone joins", n.join,
-                                                  "Placeholders: {name} {channel} {count}");
-    actions.config_changed |= notification_editor("Someone leaves", n.leave,
-                                                  "Placeholders: {name} {channel} {count}");
+    actions.config_changed |= notification_editor(
+        "Someone joins", n.join,
+        "Placeholders: {name} {channel} {from} {count}. {from} is the channel they came from; "
+        "it reads \"elsewhere\" when that channel is not visible to you, and \"the server\" "
+        "when they had just connected.");
+    actions.config_changed |= notification_editor(
+        "Someone leaves", n.leave,
+        "Placeholders: {name} {channel} {to} {count}. {to} is the channel they moved to.");
     actions.config_changed |= notification_editor("You change channel", n.channel_switch,
                                                   "Placeholders: {channel} {previous} {count}");
     actions.config_changed |= notification_editor("Connection events", n.connection,

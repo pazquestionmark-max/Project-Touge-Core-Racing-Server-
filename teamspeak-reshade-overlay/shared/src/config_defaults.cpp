@@ -140,7 +140,8 @@ StateStyle locally_muted_style() {
 
 NotificationStyle join_notification() {
     NotificationStyle n;
-    n.format = "{name} joined {channel}";
+    // Where they came from is the useful part: which channel you are in is not news to you.
+    n.format = "{name} joined from {from}";
     n.prefix = "[+]";
     n.icon = IconShape::Chevron;
     n.icon_color = kSpeakingGreen;
@@ -151,7 +152,7 @@ NotificationStyle join_notification() {
 
 NotificationStyle leave_notification() {
     NotificationStyle n;
-    n.format = "{name} left {channel}";
+    n.format = "{name} left to {to}";
     n.prefix = "[-]";
     n.icon = IconShape::Chevron;
     n.icon_color = kMutedRed;

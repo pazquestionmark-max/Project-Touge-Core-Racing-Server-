@@ -130,23 +130,26 @@ void PluginCore::emit_snapshot() {
     last_event_ = "state_snapshot";
 }
 
-void PluginCore::emit_user_joined(const UserState& user, MoveCause cause) {
+void PluginCore::emit_user_joined(const UserState& user, MoveCause cause,
+                                  const std::string& from_channel_name) {
     if (!ipc_) return;
     proto::UserJoinedPayload payload;
     payload.user = user;
     payload.cause = to_model(cause);
+    payload.from_channel_name = from_channel_name;
     ipc_->broadcast(proto::MessageType::UserJoined, proto::encode(payload), state_.server_uid());
     ++events_emitted_;
     last_event_ = "user_joined";
 }
 
 void PluginCore::emit_user_left(const UserState& user, MoveCause cause,
-                                std::uint64_t to_channel) {
+                                std::uint64_t to_channel, const std::string& to_channel_name) {
     if (!ipc_) return;
     proto::UserLeftPayload payload;
     payload.user = user;
     payload.cause = to_model(cause);
     payload.to_channel_id = to_channel;
+    payload.to_channel_name = to_channel_name;
     ipc_->broadcast(proto::MessageType::UserLeft, proto::encode(payload), state_.server_uid());
     ++events_emitted_;
     last_event_ = "user_left";
@@ -234,10 +237,10 @@ void PluginCore::resync_and_report(std::uint64_t server, MoveCause cause) {
         return false;
     };
     for (const UserState& u : after) {
-        if (!holds(before, u.unique_id)) emit_user_joined(u, cause);
+        if (!holds(before, u.unique_id)) emit_user_joined(u, cause, std::string());
     }
     for (const UserState& u : before) {
-        if (!holds(after, u.unique_id)) emit_user_left(u, cause, 0);
+        if (!holds(after, u.unique_id)) emit_user_left(u, cause, 0, std::string());
     }
     emit_snapshot();
 }
@@ -274,14 +277,25 @@ void PluginCore::on_client_moved(std::uint64_t server, std::uint16_t client,
             resync_and_report(server, cause);
             return;
         }
-        emit_user_joined(user, cause);
+        // Where they came from, so the toast can say it. A channel we are not subscribed to
+        // has no readable name, which the message falls back around rather than inventing one.
+        ChannelState from;
+        std::string from_name;
+        if (from_channel != 0 && state_.read_channel(server, from_channel, from)) {
+            from_name = from.name;
+        }
+        emit_user_joined(user, cause, from_name);
         return;
     }
 
     if (from_channel == our_channel && to_channel != our_channel) {
         UserState removed;
         if (state_.remove_user(client, removed)) {
-            emit_user_left(removed, cause, to_channel);
+            // Where they went, so the toast can say it.
+            ChannelState to;
+            std::string to_name;
+            if (to_channel != 0 && state_.read_channel(server, to_channel, to)) to_name = to.name;
+            emit_user_left(removed, cause, to_channel, to_name);
         } else {
             resync_and_report(server, cause);
         }

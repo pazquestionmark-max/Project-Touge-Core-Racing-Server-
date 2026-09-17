@@ -279,6 +279,15 @@ struct NotificationStyle {
     Color icon_color{126, 231, 135, 255};
     Color text{230, 233, 238, 255};
     Color name_color{126, 231, 135, 255};
+    /// A colour per placeholder, so "{name} joined from {from}" can put the person in one
+    /// colour and the channel in another. Each applies to whatever that placeholder expanded
+    /// to; the rest of the line stays `text`.
+    bool color_placeholders = true;
+    Color channel_color{136, 200, 255, 255};
+    Color previous_color{136, 200, 255, 255};
+    Color count_color{150, 156, 166, 255};
+    Color status_color{255, 197, 132, 255};
+    Color message_color{230, 233, 238, 255};
     Color background{16, 18, 22, 200};
     Color border{126, 231, 135, 120};
     bool show_background = true;

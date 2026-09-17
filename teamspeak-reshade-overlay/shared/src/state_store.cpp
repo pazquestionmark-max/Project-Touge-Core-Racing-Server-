@@ -194,6 +194,7 @@ StoreAction StateStore::apply(const proto::Envelope& env, std::vector<OverlayEve
             e.unique_id = p.user.unique_id;
             e.display_name = p.user.display_name.empty() ? p.user.nickname : p.user.display_name;
             e.channel_name = state_.channel.name;
+            e.previous_channel_name = p.from_channel_name;
             e.cause = p.cause;
             e.user_count = static_cast<int>(state_.users.size());
             events.push_back(std::move(e));
@@ -214,6 +215,7 @@ StoreAction StateStore::apply(const proto::Envelope& env, std::vector<OverlayEve
             e.unique_id = p.user.unique_id;
             e.display_name = p.user.display_name.empty() ? p.user.nickname : p.user.display_name;
             e.channel_name = state_.channel.name;
+            e.previous_channel_name = p.to_channel_name;
             e.cause = p.cause;
             e.user_count = static_cast<int>(state_.users.size());
             events.push_back(std::move(e));

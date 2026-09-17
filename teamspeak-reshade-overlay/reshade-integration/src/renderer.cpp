@@ -758,17 +758,34 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
                 remaining -= used;
             };
 
-            const std::size_t name_pos =
-                notification.name.empty() ? std::string::npos : line.find(notification.name);
-            if (name_pos == std::string::npos) {
-                draw_segment(line, packed(notification.text_color, alpha));
-            } else {
-                const std::string_view whole(line);
-                draw_segment(whole.substr(0, name_pos), packed(notification.text_color, alpha));
-                draw_segment(whole.substr(name_pos, notification.name.size()),
-                             packed(notification.name_color, alpha));
-                draw_segment(whole.substr(name_pos + notification.name.size()),
-                             packed(notification.text_color, alpha));
+            // Each placeholder's expansion gets its own colour. The highlights are offsets
+            // into the whole message, so they are located in the line by value rather than by
+            // offset -- that keeps them correct once a message has been wrapped into pieces.
+            const std::string_view whole(line);
+            std::size_t at = 0;
+            while (at < whole.size()) {
+                std::size_t best = std::string_view::npos;
+                std::size_t best_len = 0;
+                std::uint32_t best_colour = 0;
+                for (const Notification::Highlight& h : notification.highlights) {
+                    if (h.end <= h.begin || h.end > notification.text.size()) continue;
+                    const std::string_view value(notification.text.data() + h.begin,
+                                                 h.end - h.begin);
+                    const std::size_t found = whole.find(value, at);
+                    if (found == std::string_view::npos) continue;
+                    if (found < best || (found == best && value.size() > best_len)) {
+                        best = found;
+                        best_len = value.size();
+                        best_colour = packed(h.color, alpha);
+                    }
+                }
+                if (best == std::string_view::npos) {
+                    draw_segment(whole.substr(at), packed(notification.text_color, alpha));
+                    break;
+                }
+                draw_segment(whole.substr(at, best - at), packed(notification.text_color, alpha));
+                draw_segment(whole.substr(best, best_len), best_colour);
+                at = best + best_len;
             }
         }
 

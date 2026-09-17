@@ -398,7 +398,9 @@ std::vector<const UserState*> order_users(const OverlayState& state, const Confi
     return out;
 }
 
-std::string format_template(std::string_view tmpl, const FormatValues& v) {
+std::string format_template(std::string_view tmpl, const FormatValues& v,
+                            std::vector<FormatSpan>& spans) {
+    spans.clear();
     std::string out;
     out.reserve(tmpl.size() + 32);
     for (std::size_t i = 0; i < tmpl.size(); ++i) {
@@ -413,16 +415,25 @@ std::string format_template(std::string_view tmpl, const FormatValues& v) {
         }
         const std::string_view key = tmpl.substr(i + 1, close - i - 1);
         const std::string* sub = nullptr;
-        if (key == "name") sub = &v.name;
-        else if (key == "channel") sub = &v.channel;
-        else if (key == "parent") sub = &v.parent;
-        else if (key == "previous") sub = &v.previous;
-        else if (key == "count") sub = &v.count;
-        else if (key == "status") sub = &v.status;
-        else if (key == "message") sub = &v.message;
-        else if (key == "server") sub = &v.server;
-        else if (key == "time") sub = &v.time;
+        FormatField field = FormatField::None;
+        if (key == "name") { sub = &v.name; field = FormatField::Name; }
+        else if (key == "channel") { sub = &v.channel; field = FormatField::Channel; }
+        else if (key == "parent") { sub = &v.parent; field = FormatField::Parent; }
+        // {from} and {to} are the same value under names that read correctly in a join and a
+        // leave message respectively: the channel at the other end of the move.
+        else if (key == "previous" || key == "from" || key == "to") {
+            sub = &v.previous;
+            field = FormatField::Previous;
+        }
+        else if (key == "count") { sub = &v.count; field = FormatField::Count; }
+        else if (key == "status") { sub = &v.status; field = FormatField::Status; }
+        else if (key == "message") { sub = &v.message; field = FormatField::Message; }
+        else if (key == "server") { sub = &v.server; field = FormatField::Server; }
+        else if (key == "time") { sub = &v.time; field = FormatField::Time; }
         if (sub != nullptr) {
+            if (!sub->empty()) {
+                spans.push_back(FormatSpan{out.size(), out.size() + sub->size(), field});
+            }
             out.append(*sub);
         } else {
             // Unknown placeholder: echo it so a typo is visible in the overlay.
@@ -431,6 +442,11 @@ std::string format_template(std::string_view tmpl, const FormatValues& v) {
         i = close;
     }
     return out;
+}
+
+std::string format_template(std::string_view tmpl, const FormatValues& v) {
+    std::vector<FormatSpan> ignored;
+    return format_template(tmpl, v, ignored);
 }
 
 LayoutResult compute_layout(const OverlayState& state, const Config& cfg, const Viewport& vp,

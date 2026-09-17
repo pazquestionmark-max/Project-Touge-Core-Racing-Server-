@@ -235,6 +235,9 @@ json::Value encode(const UserJoinedPayload& p) {
     json::Value o{json::Object{}};
     o.set("user", encode_user(p.user));
     o.set("cause", json::Value(to_string(p.cause)));
+    if (!p.from_channel_name.empty()) {
+        o.set("from_channel_name", json::Value(p.from_channel_name));
+    }
     return o;
 }
 
@@ -243,11 +246,13 @@ bool decode(const json::Value& v, UserJoinedPayload& p) {
     const json::Value* u = v.find("user");
     if (u == nullptr || !decode_user(*u, p.user)) return false;
     parse_join_cause(v.get_string("cause", "moved"), p.cause);
+    p.from_channel_name = v.get_string("from_channel_name");
     return true;
 }
 
 json::Value encode(const UserLeftPayload& p) {
     json::Value o{json::Object{}};
+    if (!p.to_channel_name.empty()) o.set("to_channel_name", json::Value(p.to_channel_name));
     o.set("user", encode_user(p.user));
     o.set("cause", json::Value(to_string(p.cause)));
     if (p.to_channel_id != 0)
@@ -261,6 +266,7 @@ bool decode(const json::Value& v, UserLeftPayload& p) {
     if (u == nullptr || !decode_user(*u, p.user)) return false;
     parse_join_cause(v.get_string("cause", "moved"), p.cause);
     p.to_channel_id = static_cast<std::uint64_t>(v.get_int("to_channel_id", 0));
+    p.to_channel_name = v.get_string("to_channel_name");
     return true;
 }
 

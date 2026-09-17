@@ -245,6 +245,12 @@ json::Value write(const NotificationStyle& n) {
     o.set("icon_color", json::Value(n.icon_color.to_hex()));
     o.set("text", json::Value(n.text.to_hex()));
     o.set("name_color", json::Value(n.name_color.to_hex()));
+    o.set("color_placeholders", json::Value(n.color_placeholders));
+    o.set("channel_color", json::Value(n.channel_color.to_hex()));
+    o.set("previous_color", json::Value(n.previous_color.to_hex()));
+    o.set("count_color", json::Value(n.count_color.to_hex()));
+    o.set("status_color", json::Value(n.status_color.to_hex()));
+    o.set("message_color", json::Value(n.message_color.to_hex()));
     o.set("background", json::Value(n.background.to_hex()));
     o.set("border", json::Value(n.border.to_hex()));
     o.set("show_background", json::Value(n.show_background));
@@ -265,6 +271,12 @@ void read(const R& r, NotificationStyle& n) {
     r.col("icon_color", n.icon_color);
     r.col("text", n.text);
     r.col("name_color", n.name_color);
+    r.b("color_placeholders", n.color_placeholders);
+    r.col("channel_color", n.channel_color);
+    r.col("previous_color", n.previous_color);
+    r.col("count_color", n.count_color);
+    r.col("status_color", n.status_color);
+    r.col("message_color", n.message_color);
     r.col("background", n.background);
     r.col("border", n.border);
     r.b("show_background", n.show_background);
