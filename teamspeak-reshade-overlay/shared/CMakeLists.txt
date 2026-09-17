@@ -33,4 +33,26 @@ if(WIN32)
   target_compile_definitions(tsro_shared PUBLIC WIN32_LEAN_AND_MEAN NOMINMAX)
 endif()
 
-target_compile_definitions(tsro_shared PUBLIC TSRO_VERSION="${PROJECT_VERSION}")
+# The commit the binary was built from, shown in the settings window.
+#
+# Three separate bug reports in a row turned out to be against a build that predated the fix,
+# and there was no way to tell from a screenshot. Now there is. Absent git is not an error --
+# a source drop still builds, it just says "local".
+find_package(Git QUIET)
+set(TSRO_BUILD_ID "local")
+if(GIT_FOUND)
+  execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short=7 HEAD
+                  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                  OUTPUT_VARIABLE TSRO_GIT_SHA
+                  OUTPUT_STRIP_TRAILING_WHITESPACE
+                  ERROR_QUIET
+                  RESULT_VARIABLE TSRO_GIT_RESULT)
+  if(TSRO_GIT_RESULT EQUAL 0 AND TSRO_GIT_SHA)
+    set(TSRO_BUILD_ID "${TSRO_GIT_SHA}")
+  endif()
+endif()
+message(STATUS "TeamSpeak overlay build id: ${TSRO_BUILD_ID}")
+
+target_compile_definitions(tsro_shared PUBLIC
+  TSRO_VERSION="${PROJECT_VERSION}"
+  TSRO_BUILD_ID="${TSRO_BUILD_ID}")

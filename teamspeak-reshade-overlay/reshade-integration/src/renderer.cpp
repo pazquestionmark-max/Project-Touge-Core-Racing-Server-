@@ -570,7 +570,26 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
     // the wrap width to both is what kept clipping these, and it did so from whatever value was
     // saved in the profile, so raising the default alone would not have reached anyone.
     const float screen_cap = std::max(80.0f, viewport.width - 16.0f);
-    const float wrap_cap = std::max(80.0f, std::min(box.max_width * scale, screen_cap));
+
+    // How far a toast may actually grow, measured from the edge it is anchored to across to the
+    // far side of the screen. Right-aligned means the right edge is fixed and the box extends
+    // leftwards until it runs out of screen -- so the room available is everything to the left
+    // of that edge, not some fraction of the viewport. The frame's anchored edge does not depend
+    // on the box width, which is what makes it safe to measure before the boxes exist.
+    const Rect frame = resolve_placement(nc.placement, screen_cap, 0.0f, viewport);
+    float grow_room = screen_cap;
+    if (nc.placement.align == Align::Right) {
+        grow_room = frame.right() - 8.0f;
+    } else if (nc.placement.align == Align::Left) {
+        grow_room = viewport.width - frame.x - 8.0f;
+    } else {
+        const float centre = frame.x + frame.w * 0.5f;
+        grow_room = std::min(centre, viewport.width - centre) * 2.0f - 8.0f;
+    }
+    grow_room = std::max(80.0f, std::min(grow_room, screen_cap));
+
+    // A wrapping toast still wraps at the configured width, but never wider than there is room.
+    const float wrap_cap = std::max(80.0f, std::min(box.max_width * scale, grow_room));
 
     const MeasureFn measure = [](std::string_view t, float size) { return measure_text(t, size); };
 
@@ -598,7 +617,7 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
         }
         t.badge_w = t.badge.empty() ? 0.0f : measure_text(t.badge, font) + gap;
 
-        const float ceiling = notification.wrap ? wrap_cap : screen_cap;
+        const float ceiling = notification.wrap ? wrap_cap : grow_room;
         const float chrome = bar_w + pad_x * 2.0f + t.icon_w + t.prefix_w + t.badge_w;
         const float wanted = measure_text(notification.text, font);
         const float room = std::max(16.0f, ceiling - chrome);

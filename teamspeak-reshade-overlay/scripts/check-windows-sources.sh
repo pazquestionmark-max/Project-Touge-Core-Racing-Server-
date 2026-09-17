@@ -50,7 +50,7 @@ INCLUDES=(
 )
 # -Wshadow earns its place: MSVC's C4457 (a local hiding a parameter) is an error under
 # warnings-as-errors in CI, and -Wall -Wextra alone does not report it.
-FLAGS=(-std=c++17 -fsyntax-only -Wall -Wextra -Wshadow -DTSRO_VERSION='"1.0.0"'
+FLAGS=(-std=c++17 -fsyntax-only -Wall -Wextra -Wshadow -DTSRO_VERSION='"1.0.0"' -DTSRO_BUILD_ID='"check"'
        -DWIN32_LEAN_AND_MEAN -DNOMINMAX -include objbase.h)
 
 SOURCES=(

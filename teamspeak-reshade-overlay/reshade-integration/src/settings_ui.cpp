@@ -1603,7 +1603,7 @@ SettingsActions SettingsUi::draw(Config& config, const LinkDiagnostics& diagnost
 
     ImGui::TextColored(ImVec4(0.35f, 0.65f, 1.0f, 1.0f), "Paz' TeamSpeak Overlay v1.0");
     ImGui::SameLine();
-    ImGui::TextDisabled("(build %s)", TSRO_VERSION);
+    ImGui::TextDisabled("(build %s-%s)", TSRO_VERSION, TSRO_BUILD_ID);
     if (ImGui::Checkbox("All settings", &config.general.advanced_settings)) {
         actions.config_changed = true;
     }
