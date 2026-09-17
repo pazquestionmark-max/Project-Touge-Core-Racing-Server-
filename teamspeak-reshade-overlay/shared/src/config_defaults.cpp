@@ -210,6 +210,22 @@ NotificationStyle chat_notification() {
     return n;
 }
 
+NotificationStyle private_chat_notification() {
+    NotificationStyle n;
+    // Off by default, like every other path to a private message in this project: the overlay
+    // never surfaces private chat until it is asked to. Switching this on also asks the plugin
+    // to start sending them -- until then it is not even told about them.
+    n.enabled = false;
+    n.format = "{name}: {message}";
+    n.prefix = "[PM]";
+    n.icon = IconShape::Whisper;
+    n.icon_color = Color{197, 154, 255, 255};
+    n.name_color = Color{197, 154, 255, 255};
+    n.border = Color{197, 154, 255, 110};
+    n.fade.hold_ms = 8000;   // long enough to read a sentence and act on it
+    return n;
+}
+
 }  // namespace
 
 Config Config::defaults() {
@@ -234,6 +250,7 @@ Config Config::defaults() {
     c.notifications.connection = connection_notification();
     c.notifications.whisper = whisper_notification();
     c.notifications.chat = chat_notification();
+    c.notifications.private_chat = private_chat_notification();
 
     return c;
 }

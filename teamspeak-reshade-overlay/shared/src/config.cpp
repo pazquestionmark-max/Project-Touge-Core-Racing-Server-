@@ -507,6 +507,7 @@ json::Value Config::to_json() const {
         o.set("connection", write(n.connection));
         o.set("whisper", write(n.whisper));
         o.set("chat", write(n.chat));
+        o.set("private_chat", write(n.private_chat));
         root.set("notifications", std::move(o));
     }
     {
@@ -751,6 +752,7 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         read(n.sub("connection"), x.connection);
         read(n.sub("whisper"), x.whisper);
         read(n.sub("chat"), x.chat);
+        read(n.sub("private_chat"), x.private_chat);
     }
     {
         const R h = r.sub("chat");

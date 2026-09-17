@@ -15,6 +15,7 @@
 
 #include "plugin_core.hpp"
 #include "ts_query_stub.hpp"
+#include "tsro/notifications.hpp"
 #include "tsro/overlay_client.hpp"
 #include "tsro_test.hpp"
 
@@ -537,4 +538,36 @@ TEST(plugin, diagnostics_describe_the_live_integration) {
     CHECK(all.find("Racing #1") != std::string::npos);
     CHECK(all.find("Example TS") != std::string::npos);
     CHECK(all.find("Overlay clients: 1") != std::string::npos);
+}
+
+TEST(plugin, someone_else_joining_produces_a_notification) {
+    // End-to-end for the reported bug: only the local user's own moves were producing toasts.
+    Harness h("notify-join");
+    h.go_live();
+    // Drain whatever the initial synchronisation produced so only the join is measured.
+    h.overlay->drain_events();
+
+    h.client.servers[kServer].clients[kBob].channel = kRacing;
+    h.core->on_client_moved(kServer, kBob, kLobby, kRacing, MoveCause::Moved);
+    CHECK(wait_for([&] { return h.seen().find_user_by_uid("bob=") != nullptr; }));
+
+    std::vector<OverlayEvent> events;
+    CHECK(wait_for([&] {
+        for (OverlayEvent& e : h.overlay->drain_events()) events.push_back(std::move(e));
+        for (const OverlayEvent& e : events) {
+            if (e.kind == OverlayEventKind::UserJoined) return true;
+        }
+        return false;
+    }));
+
+    Config cfg = Config::defaults();
+    NotificationQueue queue;
+    // Far enough past the connection that post-connect suppression cannot be what hides it.
+    const std::int64_t now = 10 * 60 * 1000;
+    for (const OverlayEvent& e : events) queue.submit(e, cfg, now);
+    bool joined = false;
+    for (const Notification& n : queue.items()) {
+        if (n.kind == NotificationKind::Join) joined = true;
+    }
+    CHECK(joined);
 }

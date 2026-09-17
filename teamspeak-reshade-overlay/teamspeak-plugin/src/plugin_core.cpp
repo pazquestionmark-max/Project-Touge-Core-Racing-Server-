@@ -219,6 +219,27 @@ void PluginCore::handle_self_moved(std::uint64_t server, std::uint64_t from_chan
     emit_snapshot();
 }
 
+void PluginCore::resync_and_report(std::uint64_t server, MoveCause cause) {
+    const std::vector<UserState> before = state_.state().users;
+    state_.resynchronise(server);
+    last_channel_ = state_.channel_id();
+    const std::vector<UserState> after = state_.state().users;
+
+    const auto holds = [](const std::vector<UserState>& list, const std::string& uid) {
+        for (const UserState& u : list) {
+            if (u.unique_id == uid) return true;
+        }
+        return false;
+    };
+    for (const UserState& u : after) {
+        if (!holds(before, u.unique_id)) emit_user_joined(u, cause);
+    }
+    for (const UserState& u : before) {
+        if (!holds(after, u.unique_id)) emit_user_left(u, cause, 0);
+    }
+    emit_snapshot();
+}
+
 void PluginCore::on_client_moved(std::uint64_t server, std::uint16_t client,
                                  std::uint64_t from_channel, std::uint64_t to_channel,
                                  MoveCause cause) {
@@ -243,8 +264,15 @@ void PluginCore::on_client_moved(std::uint64_t server, std::uint16_t client,
 
     if (to_channel == our_channel && from_channel != our_channel) {
         UserState user;
-        if (!state_.read_user(server, client, user)) return;
-        if (state_.add_user(user)) emit_user_joined(user, cause);
+        if (!state_.read_user(server, client, user) || !state_.add_user(user)) {
+            // Either TeamSpeak could not yet tell us who this is, or we already had them --
+            // which happens when a visibility event beat the move event to us. Neither is a
+            // reason to stay silent about someone arriving, so re-read the channel and report
+            // whatever actually changed.
+            resync_and_report(server, cause);
+            return;
+        }
+        emit_user_joined(user, cause);
         return;
     }
 
@@ -252,6 +280,8 @@ void PluginCore::on_client_moved(std::uint64_t server, std::uint16_t client,
         UserState removed;
         if (state_.remove_user(client, removed)) {
             emit_user_left(removed, cause, to_channel);
+        } else {
+            resync_and_report(server, cause);
         }
         return;
     }

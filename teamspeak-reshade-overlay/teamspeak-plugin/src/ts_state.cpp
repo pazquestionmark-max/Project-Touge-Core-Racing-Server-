@@ -80,6 +80,15 @@ bool TsState::read_user(std::uint64_t server, std::uint16_t client, UserState& o
 
     read_bool(q, server, client, UserFlag::InputMuted, u.input_muted);
     read_bool(q, server, client, UserFlag::OutputMuted, u.output_muted);
+    {
+        // Either property means the speakers are off, so they are ORed rather than picked
+        // between. Absent stays absent: if neither could be read we do not claim to know.
+        std::optional<bool> output_only;
+        read_bool(q, server, client, UserFlag::OutputOnlyMuted, output_only);
+        if (output_only.has_value()) {
+            u.output_muted = u.output_muted.value_or(false) || *output_only;
+        }
+    }
     read_bool(q, server, client, UserFlag::InputHardware, u.input_hardware);
     read_bool(q, server, client, UserFlag::OutputHardware, u.output_hardware);
     read_bool(q, server, client, UserFlag::Away, u.away);

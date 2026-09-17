@@ -262,8 +262,25 @@ ResolvedUser resolve_user(const UserState& u, const Config& cfg, float speaking_
     if (away) apply_text(ind.away, std::nullopt);
     if (suppressed && ind.suppressed.enabled) apply_text(ind.suppressed, std::nullopt);
     if (locally_muted) apply_text(ind.locally_muted, std::nullopt);
-    if (spk_muted) apply_text(ind.speaker_muted, ov ? ov->muted_color : std::nullopt);
+    // Speakers last, so speaker mute wins when both are set. It is the more consequential of
+    // the two -- someone with their mic off can still hear you; someone with their speakers off
+    // cannot -- and TeamSpeak sets both whenever the speaker button is pressed, so without this
+    // ordering the speaker state would never be the one shown.
     if (mic_muted) apply_text(ind.mic_muted, ov ? ov->muted_color : std::nullopt);
+    if (spk_muted) apply_text(ind.speaker_muted, ov ? ov->muted_color : std::nullopt);
+
+    // Who someone is outranks what they are currently doing. A friend who has muted their mic
+    // is still a friend, and the mute is already unmistakable from its icon and the dimmed row,
+    // so nothing is lost by keeping the name in its identity colour -- whereas losing it means
+    // the friend colour looks like it does nothing, which is exactly how this was reported.
+    //
+    // Your own row is deliberately not in this: your own mute state is feedback you want, and
+    // you already know which row is yours.
+    if (ov != nullptr && ov->name_color) {
+        r.name_color = *ov->name_color;
+    } else if (r.is_friend && cfg.user_list.color_friends) {
+        r.name_color = cfg.user_list.friend_color;
+    }
 
     if (u.talking && ind.speaking.enabled) {
         r.speaking = true;

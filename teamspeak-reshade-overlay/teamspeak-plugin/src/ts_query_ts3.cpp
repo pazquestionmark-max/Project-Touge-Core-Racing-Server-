@@ -29,9 +29,13 @@ std::string take(const TS3Functions& ts, char* owned) {
 std::size_t map(UserFlag flag) {
     switch (flag) {
         case UserFlag::InputMuted: return CLIENT_INPUT_MUTED;
-        // CLIENT_OUTPUT_MUTED implies microphone mute; CLIENT_OUTPUTONLY_MUTED is the speaker
-        // state on its own, which is what the overlay must show as "speakers muted".
-        case UserFlag::OutputMuted: return CLIENT_OUTPUTONLY_MUTED;
+        // TeamSpeak reports speaker mute through two properties and only one of them is ever
+        // set at a time. The speaker button sets CLIENT_OUTPUT_MUTED ("speaker mute implies
+        // microphone mute", per the SDK); CLIENT_OUTPUTONLY_MUTED is the rarer case of speakers
+        // off with the mic still live. Reading only the second one -- as this did -- means the
+        // ordinary case, someone pressing the speaker button, showed nothing at all.
+        case UserFlag::OutputMuted: return CLIENT_OUTPUT_MUTED;
+        case UserFlag::OutputOnlyMuted: return CLIENT_OUTPUTONLY_MUTED;
         case UserFlag::InputHardware: return CLIENT_INPUT_HARDWARE;
         case UserFlag::OutputHardware: return CLIENT_OUTPUT_HARDWARE;
         case UserFlag::InputDeactivated: return CLIENT_INPUT_DEACTIVATED;

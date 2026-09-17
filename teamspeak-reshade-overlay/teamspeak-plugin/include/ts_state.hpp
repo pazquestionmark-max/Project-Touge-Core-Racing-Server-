@@ -27,7 +27,8 @@ namespace tsro::plugin {
 /// ClientProperties / ClientPropertiesRare enumerator; see docs/protocol.md §6.
 enum class UserFlag {
     InputMuted,        ///< CLIENT_INPUT_MUTED
-    OutputMuted,       ///< CLIENT_OUTPUTONLY_MUTED — speaker mute, independent of the mic
+    OutputMuted,       ///< CLIENT_OUTPUT_MUTED — speakers off; the SDK says this implies mic mute
+    OutputOnlyMuted,   ///< CLIENT_OUTPUTONLY_MUTED — speakers off while the mic may still be live
     InputHardware,     ///< CLIENT_INPUT_HARDWARE
     OutputHardware,    ///< CLIENT_OUTPUT_HARDWARE
     InputDeactivated,  ///< CLIENT_INPUT_DEACTIVATED — own client only, per the SDK

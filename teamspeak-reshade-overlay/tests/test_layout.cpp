@@ -895,3 +895,53 @@ TEST(layout, an_unknown_friend_state_is_not_treated_as_a_friend) {
     CHECK(!r.is_friend);
     CHECK_EQ(r.name_color.to_hex(), cfg.appearance.text_default.to_hex());
 }
+
+TEST(layout, speaker_mute_wins_over_microphone_mute) {
+    // TeamSpeak sets both whenever the speaker button is pressed -- "speaker mute implies
+    // microphone mute" -- so the one the user sees has to be the speaker, or the state that
+    // actually stops them hearing you would never be the one shown.
+    Config cfg = Config::defaults();
+    UserState u = make_user("a=", "Alice");
+    u.input_muted = true;
+    u.output_muted = true;
+
+    const ResolvedUser r = resolve_user(u, cfg, 0.0f);
+    CHECK_EQ(r.name_color.to_hex(), cfg.indicators.speaker_muted.text_color.to_hex());
+}
+
+TEST(layout, microphone_mute_alone_still_shows_as_microphone_mute) {
+    Config cfg = Config::defaults();
+    UserState u = make_user("a=", "Alice");
+    u.input_muted = true;
+
+    const ResolvedUser r = resolve_user(u, cfg, 0.0f);
+    CHECK_EQ(r.name_color.to_hex(), cfg.indicators.mic_muted.text_color.to_hex());
+}
+
+TEST(layout, a_muted_friend_keeps_the_friend_colour) {
+    // The reported bug: friends were being read from TeamSpeak and tagged correctly, but any
+    // muted friend came out in the mute grey, so the colour looked like it did nothing.
+    Config cfg = Config::defaults();
+    UserState u = make_user("a=", "Alice");
+    u.is_friend = true;
+    u.input_muted = true;
+    u.output_muted = true;
+
+    const ResolvedUser r = resolve_user(u, cfg, 0.0f);
+    CHECK_EQ(r.name_color.to_hex(), cfg.user_list.friend_color.to_hex());
+    // The mute is not lost -- it is still carried by the icon and the dimmed row.
+    CHECK(r.entry_opacity < 1.0f);
+}
+
+TEST(layout, an_explicit_per_user_colour_still_beats_the_friend_colour) {
+    Config cfg = Config::defaults();
+    UserOverride ov;
+    ov.name_color = Color{255, 0, 255, 255};
+    cfg.user_overrides["a="] = ov;
+
+    UserState u = make_user("a=", "Alice");
+    u.is_friend = true;
+    u.input_muted = true;
+
+    CHECK_EQ(resolve_user(u, cfg, 0.0f).name_color.to_hex(), std::string("#FF00FFFF"));
+}

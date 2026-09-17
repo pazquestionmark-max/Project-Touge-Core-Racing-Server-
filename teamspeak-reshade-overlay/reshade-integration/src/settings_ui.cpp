@@ -822,6 +822,8 @@ void SettingsUi::tab_notifications(Config& config, SettingsActions& actions) {
                                                   "Placeholders: {name}");
     actions.config_changed |= notification_editor("Chat message", n.chat,
                                                   "Placeholders: {name} {message} {channel}");
+    actions.config_changed |= notification_editor("Private message", n.private_chat,
+                                                  "Placeholders: {name} {message}");
 }
 
 void SettingsUi::tab_chat(Config& config, SettingsActions& actions) {
@@ -1482,7 +1484,14 @@ void SettingsUi::basic_view(Config& config, const LinkDiagnostics& diagnostics,
             actions.config_changed |= ImGui::Checkbox("Channel moves", &n.channel_switch.enabled);
             actions.config_changed |= ImGui::Checkbox("Connection changes", &n.connection.enabled);
             actions.config_changed |= ImGui::Checkbox("Whispers", &n.whisper.enabled);
-            actions.config_changed |= ImGui::Checkbox("Chat messages", &n.chat.enabled);
+            actions.config_changed |= ImGui::Checkbox("Channel chat", &n.chat.enabled);
+            if (ImGui::Checkbox("Private messages##notif", &n.private_chat.enabled)) {
+                actions.config_changed = true;
+                actions.subscription_changed = true;
+            }
+            help("A message sent to you personally gets its own toast, naming the sender. This "
+                 "also needs private messages switched on under Chat -- with them off the "
+                 "plugin is never asked for them at all.");
         }
     }
 

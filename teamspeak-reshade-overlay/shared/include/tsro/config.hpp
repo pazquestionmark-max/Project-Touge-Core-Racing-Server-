@@ -325,6 +325,9 @@ struct NotificationsConfig {
     NotificationStyle connection{};
     NotificationStyle whisper{};
     NotificationStyle chat{};
+    /// Private messages get their own toast. A message sent to you personally is not the same
+    /// event as one sent to the channel, and the thing you need from it first is who it is from.
+    NotificationStyle private_chat{};
 };
 
 struct ChatConfig {

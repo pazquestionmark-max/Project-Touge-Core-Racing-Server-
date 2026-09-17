@@ -317,3 +317,71 @@ TEST(envelope, zero_durations_are_treated_as_instant) {
     envelope.update({{"a=", true}}, 16);
     CHECK_NEAR(envelope.intensity("a="), 1.0f, 0.001f);
 }
+
+TEST(notifications, a_private_message_names_its_sender) {
+    Config cfg = Config::defaults();
+    cfg.notifications.private_chat.enabled = true;
+    NotificationQueue q;
+
+    OverlayEvent e;
+    e.kind = OverlayEventKind::ChatMessage;
+    e.chat.category = ChatCategory::Private;
+    e.chat.sender_name = "Bob";
+    e.chat.text = "need you on channel 2";
+    q.submit(e, cfg, 1000);
+
+    CHECK_EQ(q.items().size(), std::size_t{1});
+    const Notification& n = q.items().front();
+    CHECK(n.kind == NotificationKind::PrivateChat);
+    CHECK_EQ(n.name, std::string("Bob"));
+    CHECK(n.text.find("Bob") != std::string::npos);
+    CHECK(n.text.find("need you on channel 2") != std::string::npos);
+}
+
+TEST(notifications, a_channel_message_is_a_different_toast_from_a_private_one) {
+    Config cfg = Config::defaults();
+    cfg.notifications.chat.enabled = true;
+    NotificationQueue q;
+
+    OverlayEvent channel;
+    channel.kind = OverlayEventKind::ChatMessage;
+    channel.chat.category = ChatCategory::Channel;
+    channel.chat.sender_name = "Bob";
+    channel.chat.text = "hello";
+    q.submit(channel, cfg, 1000);
+
+    CHECK_EQ(q.items().size(), std::size_t{1});
+    CHECK(q.items().front().kind == NotificationKind::Chat);
+    CHECK(q.items().front().prefix != cfg.notifications.private_chat.prefix);
+}
+
+TEST(notifications, an_unnamed_sender_still_produces_something_readable) {
+    Config cfg = Config::defaults();
+    cfg.notifications.private_chat.enabled = true;
+    NotificationQueue q;
+
+    OverlayEvent e;
+    e.kind = OverlayEventKind::ChatMessage;
+    e.chat.category = ChatCategory::Private;
+    e.chat.text = "hello";
+    q.submit(e, cfg, 1000);
+
+    CHECK_EQ(q.items().size(), std::size_t{1});
+    CHECK(!q.items().front().name.empty());
+}
+
+TEST(notifications, private_message_toasts_are_off_until_asked_for) {
+    // The brief is explicit that private chat is never exposed by default. Enabling the toast
+    // is what also makes the add-on ask the plugin for private messages at all.
+    Config cfg = Config::defaults();
+    NotificationQueue q;
+
+    OverlayEvent e;
+    e.kind = OverlayEventKind::ChatMessage;
+    e.chat.category = ChatCategory::Private;
+    e.chat.sender_name = "Bob";
+    e.chat.text = "hello";
+    q.submit(e, cfg, 1000);
+
+    CHECK(q.items().empty());
+}

@@ -21,6 +21,7 @@ const NotificationStyle& style_for(NotificationKind k, const NotificationsConfig
         case NotificationKind::Connection: return c.connection;
         case NotificationKind::Whisper: return c.whisper;
         case NotificationKind::Chat: return c.chat;
+        case NotificationKind::PrivateChat: return c.private_chat;
     }
     return c.join;
 }
@@ -94,9 +95,15 @@ void NotificationQueue::submit(const OverlayEvent& ev, const Config& cfg, std::i
             break;
         case OverlayEventKind::WhisperStarted: kind = NotificationKind::Whisper; break;
         case OverlayEventKind::ChatMessage:
-            kind = NotificationKind::Chat;
+            // A message sent to you personally is its own kind of event, with its own toast --
+            // the first thing you need from it is who sent it, which a channel-chat toast
+            // shares a format with and so cannot make obvious.
+            kind = ev.chat.category == ChatCategory::Private ? NotificationKind::PrivateChat
+                                                             : NotificationKind::Chat;
             fv.message = ev.chat.text;
             fv.name = ev.chat.sender_name;
+            // A sender TeamSpeak could not name is still better than an anonymous message.
+            if (fv.name.empty()) fv.name = "someone";
             break;
         default:
             return;  // speaking/commander/desync changes are indicator states, not notifications

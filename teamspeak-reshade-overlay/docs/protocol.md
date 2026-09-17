@@ -248,6 +248,7 @@ TeamSpeak's Plugin API 26 actually exposes.
 | `channel_commander` | `CLIENT_IS_CHANNEL_COMMANDER` | Supported, real-time via `ts3plugin_onUpdateClientEvent` |
 | `priority_speaker` | `CLIENT_IS_PRIORITY_SPEAKER` | Supported |
 | `is_talker` / `talk_power` | `CLIENT_IS_TALKER` / `CLIENT_TALK_POWER` | Supported. "Suppressed" is derived: `!is_talker` in a moderated channel. |
+| `output_muted` | `CLIENT_OUTPUT_MUTED` **or** `CLIENT_OUTPUTONLY_MUTED` | Supported. TeamSpeak sets only one of the two: the speaker button sets `CLIENT_OUTPUT_MUTED` (which the SDK documents as implying microphone mute), while `CLIENT_OUTPUTONLY_MUTED` is the rarer speakers-off-mic-live case. Reading either alone misses the other, so both are read and ORed. |
 | `locally_muted` | `CLIENT_IS_MUTED` | Supported for clients other than self |
 | `has_avatar` | `CLIENT_FLAG_AVATAR` | Flag only. |
 | avatar **image** | — | **Not obtainable through the plugin API.** The flag says an avatar exists; retrieving the bitmap is not part of the plugin API surface. The overlay shows an initial-letter badge instead, which is stated in the UI. |

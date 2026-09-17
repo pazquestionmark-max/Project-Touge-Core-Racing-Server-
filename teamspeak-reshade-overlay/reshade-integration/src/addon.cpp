@@ -107,12 +107,19 @@ std::int64_t now_ms() {
 }
 
 tsro::proto::ConfigurationUpdatedPayload subscription_from(const tsro::Config& config) {
+    using tsro::ChatConfig;
     tsro::proto::ConfigurationUpdatedPayload payload;
     // Only ask for what the user actually chose to display. A category left off is filtered in
     // the plugin and never reaches this process at all.
-    payload.chat.channel = config.chat.placement.visible && config.chat.show_channel_messages;
-    payload.chat.server = config.chat.placement.visible && config.chat.show_server_messages;
-    payload.chat.priv = config.chat.placement.visible && config.chat.show_private_messages;
+    // A category is asked for when either the feed or a toast wants it. Without this, turning
+    // on the private-message toast would light up a setting that could never fire, because the
+    // plugin would never have been told to send one.
+    const ChatConfig& chat = config.chat;
+    payload.chat.channel = (chat.placement.visible && chat.show_channel_messages) ||
+                           config.notifications.chat.enabled;
+    payload.chat.server = chat.placement.visible && chat.show_server_messages;
+    payload.chat.priv = (chat.placement.visible && chat.show_private_messages) ||
+                        config.notifications.private_chat.enabled;
     payload.max_chat_length = config.chat.max_message_length;
     payload.want_speaking_events = true;
     return payload;

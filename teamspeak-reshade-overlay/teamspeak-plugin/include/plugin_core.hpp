@@ -83,6 +83,13 @@ private:
     void handle_self_moved(std::uint64_t server, std::uint64_t from_channel,
                            std::uint64_t to_channel);
     void emit_snapshot();
+    /// Re-reads the whole channel and emits a join or leave for every difference.
+    ///
+    /// The fallback whenever a move cannot be turned into an event directly -- TeamSpeak does
+    /// not guarantee a client's properties are readable the instant it reports the move, and a
+    /// client whose unique identifier cannot be read yet has no identity to announce. Re-reading
+    /// is authoritative and cannot miss anyone.
+    void resync_and_report(std::uint64_t server, MoveCause cause);
     void emit_user_joined(const UserState& user, MoveCause cause);
     void emit_user_left(const UserState& user, MoveCause cause, std::uint64_t to_channel);
 

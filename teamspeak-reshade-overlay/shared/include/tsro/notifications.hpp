@@ -19,7 +19,9 @@
 
 namespace tsro {
 
-enum class NotificationKind { Join, Leave, ChannelSwitch, Connection, Whisper, Chat };
+enum class NotificationKind {
+    Join, Leave, ChannelSwitch, Connection, Whisper, Chat, PrivateChat
+};
 
 enum class NotificationPhase { FadeIn, Visible, FadeOut, Dead };
 
