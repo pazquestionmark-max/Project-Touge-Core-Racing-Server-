@@ -215,8 +215,17 @@ ResolvedUser resolve_user(const UserState& u, const Config& cfg, float speaking_
                     ? ov->display_override
                     : (u.display_name.empty() ? u.nickname : u.display_name);
 
+    // A friend's tag goes in front of their TeamSpeak name, as "[tag] Name".
+    r.is_friend = ov != nullptr && ov->is_friend;
+    if (r.is_friend && cfg.user_list.show_friend_tag && !ov->friend_tag.empty()) {
+        r.friend_tag = "[" + ov->friend_tag + "] ";
+        r.display = r.friend_tag + r.display;
+    }
+
     const IndicatorsConfig& ind = cfg.indicators;
     r.name_color = cfg.appearance.text_default;
+    // A friend colour is a default, not an override: an explicit per-user colour still wins.
+    if (r.is_friend && cfg.user_list.color_friends) r.name_color = cfg.user_list.friend_color;
     if (ov != nullptr && ov->name_color) r.name_color = *ov->name_color;
     if (u.is_self && cfg.user_list.highlight_local_user && (ov == nullptr || !ov->name_color))
         r.name_color = cfg.user_list.local_user_color;
@@ -414,6 +423,12 @@ LayoutResult compute_layout(const OverlayState& state, const Config& cfg, const 
     const float icon = cfg.appearance.icon_size * s;
     const float gap = cfg.user_list.indicator_gap * s;
 
+    // One source of truth for alignment: the group's when linked, the element's own otherwise.
+    const Align content_align =
+        cfg.group.enabled ? cfg.group.align : cfg.user_list.placement.align;
+    const Align title_align =
+        cfg.group.enabled ? cfg.group.align : cfg.channel_title.placement.align;
+
     const bool connected = state.server.connection == ConnectionState::Connected;
     out.degraded = !connected || !state.synchronised || state.stale;
     if (!connected) out.degraded_reason = "not connected to TeamSpeak";
@@ -473,6 +488,7 @@ LayoutResult compute_layout(const OverlayState& state, const Config& cfg, const 
         const float h = title_font + title_pad_y * 2.0f;
 
         out.title.visible = true;
+        out.title.align = title_align;
         out.title.rect = resolve_placement(tc.placement, w, h, vp);
         out.title.text = std::move(text);
         out.title.text_color = co && co->title_color ? *co->title_color : tc.text;
@@ -530,6 +546,7 @@ LayoutResult compute_layout(const OverlayState& state, const Config& cfg, const 
                                        pad_y * 2.0f;
 
         out.users.visible = visible_rows > 0;
+        out.users.align = content_align;
         out.users.rect = resolve_placement(ul.placement, std::max(widest, 80.0f), list_h, vp);
 
         // Row rectangles are placed relative to the resolved list rect, so the whole list moves

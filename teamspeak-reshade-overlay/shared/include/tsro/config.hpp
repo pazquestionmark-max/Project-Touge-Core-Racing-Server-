@@ -230,6 +230,13 @@ struct UserListConfig {
     bool show_overflow_count = true;
     bool show_avatar_initial = false; ///< see docs/protocol.md §6: avatar images are unavailable
     float indicator_gap = 4.0f;
+
+    /// Colour applied to anyone marked as a friend, unless they have their own name colour.
+    bool color_friends = true;
+    Color friend_color{126, 231, 135, 255};
+    /// Draw the friend's tag as "[tag] " before their name.
+    bool show_friend_tag = true;
+    Color friend_tag_color{136, 200, 255, 255};
 };
 
 struct NotificationStyle {
@@ -374,6 +381,15 @@ struct LoggingConfig {
 /// reconnects, unlike a nickname or a session client id.
 struct UserOverride {
     bool enabled = true;
+    /// Marks this identity as a friend.
+    ///
+    /// TeamSpeak's own friend/foe list is NOT readable from a plugin -- it lives in the client's
+    /// local Contacts database and appears nowhere in the plugin API (no property, no callback).
+    /// So the list is kept here instead, keyed on the same stable identity as every other
+    /// override, which means it survives nickname changes and reconnects just as they do.
+    bool is_friend = false;
+    /// Shown as "[tag] Nickname" in front of their TeamSpeak name. Empty shows no tag.
+    std::string friend_tag;
     std::optional<Color> name_color;
     std::optional<Color> speaking_color;
     std::optional<Color> muted_color;

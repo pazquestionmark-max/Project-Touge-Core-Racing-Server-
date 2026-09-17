@@ -169,11 +169,13 @@ OverlayState preview_state() {
     UserState recording = preview_user("preview-g=", "Grace (recording)");
     recording.recording = true;
 
+    UserState friend_user = preview_user("preview-friend=", "Friend User");
+
     UserState long_name =
         preview_user("preview-h=", "AnExtremelyLongTeamSpeakNicknameForTestingOverflow");
 
-    s.users = {me,      talking, commander, mic_muted, speaker_muted,
-               away,    whisper, recording, long_name};
+    s.users = {me,      talking, commander,   mic_muted, speaker_muted,
+               away,    whisper, recording,   friend_user, long_name};
     return s;
 }
 
@@ -301,7 +303,7 @@ void Renderer::draw_title(ImDrawList* dl, const Config& config, const LayoutResu
     }
 
     float x = title.rect.x + pad_x;
-    if (config.channel_title.placement.align == Align::Right) {
+    if (title.align == Align::Right) {
         x = title.rect.right() - pad_x - measure_text(title.text, title.font_size) -
             (title.icon != IconShape::None
                  ? config.appearance.icon_size * config.general.scale +
@@ -376,7 +378,7 @@ void Renderer::draw_users(ImDrawList* dl, const Config& config, const LayoutResu
         // ending where the panel does. Measuring the row first is what lets the leading icons
         // stay attached to the name instead of floating at a fixed left margin.
         float x = row.rect.x;
-        if (config.user_list.placement.align == Align::Right) {
+        if (layout.users.align == Align::Right) {
             float content = row.name.width;
             for (const ResolvedUser::Indicator& indicator : resolved.leading) {
                 content += icon * indicator.scale + gap;
@@ -385,7 +387,7 @@ void Renderer::draw_users(ImDrawList* dl, const Config& config, const LayoutResu
                 content += icon * indicator.scale + gap;
             }
             x = row.rect.right() - content;
-        } else if (config.user_list.placement.align == Align::Center) {
+        } else if (layout.users.align == Align::Center) {
             float content = row.name.width;
             for (const ResolvedUser::Indicator& indicator : resolved.leading) {
                 content += icon * indicator.scale + gap;
@@ -409,6 +411,17 @@ void Renderer::draw_users(ImDrawList* dl, const Config& config, const LayoutResu
                 draw_text(dl, config, x, y, font, packed(resolved.name_color, row_alpha), line);
                 y += font;
             }
+        } else if (!resolved.friend_tag.empty() &&
+                   row.name.text.rfind(resolved.friend_tag, 0) == 0) {
+            // "[tag] " in its own colour, then the name. Only when the tag survived fitting --
+            // a truncated name may have eaten it, in which case draw the line as one piece.
+            const float tag_x = x - row.name.scroll_offset;
+            draw_text(dl, config, tag_x, text_y, font,
+                      packed(config.user_list.friend_tag_color, row_alpha), resolved.friend_tag);
+            const float tag_w = measure_text(resolved.friend_tag, font);
+            draw_text(dl, config, tag_x + tag_w, text_y, font,
+                      packed(resolved.name_color, row_alpha),
+                      std::string_view(row.name.text).substr(resolved.friend_tag.size()));
         } else {
             draw_text(dl, config, x - row.name.scroll_offset, text_y, font,
                       packed(resolved.name_color, row_alpha), row.name.text);
@@ -475,9 +488,21 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
                    notification.show_border ? packed(notification.border, alpha) : 0u,
                    config.appearance.panel_border_thickness);
 
-        float x = area.x + pad_x;
         const float centre_y = y + height * 0.5f;
         const float text_top = centre_y - font * 0.5f;
+
+        // Right-aligned notifications put their content flush with the box's right edge.
+        float x = area.x + pad_x;
+        if (nc.placement.align == Align::Right) {
+            float content = 0.0f;
+            if (notification.icon != IconShape::None) content += icon + gap;
+            if (!notification.prefix.empty()) {
+                content += measure_text(notification.prefix, font) + gap;
+            }
+            const float body = measure_text(notification.text, font);
+            content += std::min(body, width - pad_x * 2.0f - content);
+            x = std::max(area.x + pad_x, area.x + width - pad_x - content);
+        }
 
         if (notification.icon != IconShape::None) {
             draw_icon(dl, notification.icon, x + icon * 0.5f, centre_y, icon,
@@ -544,12 +569,17 @@ void Renderer::draw_chat(ImDrawList* dl, const Config& config, const Viewport& v
     const float scale = config.general.scale;
     const float font = config.appearance.font_size * scale * cc.font_scale;
     const float width = cc.width * scale;
-    const float pad_x = config.appearance.padding_x * scale;
-    const float pad_y = config.appearance.padding_y * scale;
-    const float line_height = font * 1.25f;
+    // Chat has its own padding for the same reason notifications do: the user list may be at
+    // zero, and a panel with text against its border is unreadable.
+    const float pad_x = std::max(6.0f, config.notifications.padding_x * scale);
+    const float pad_y = std::max(4.0f, config.notifications.padding_y * scale);
+    const float line_height = font * 1.3f;
+    const float text_width = std::max(40.0f, width - pad_x * 2.0f);
 
-    // Select the visible window, honouring retention and the category switches. Filtering here
-    // as well as in the plugin means turning a category off hides existing messages too.
+    const MeasureFn measure = [](std::string_view t, float size) { return measure_text(t, size); };
+
+    // Select the visible window. Filtering here as well as in the plugin means turning a
+    // category off hides messages already received, not just future ones.
     std::vector<const ChatMessage*> visible;
     visible.reserve(messages.size());
     for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
@@ -558,7 +588,8 @@ void Renderer::draw_chat(ImDrawList* dl, const Config& config, const Viewport& v
         if (message.category == ChatCategory::Server && !cc.show_server_messages) continue;
         if (message.category == ChatCategory::Private && !cc.show_private_messages) continue;
         if (cc.retention_seconds > 0 &&
-            now_ms - message.timestamp_ms > static_cast<std::int64_t>(cc.retention_seconds) * 1000) {
+            now_ms - message.timestamp_ms >
+                static_cast<std::int64_t>(cc.retention_seconds) * 1000) {
             continue;
         }
         visible.push_back(&message);
@@ -567,54 +598,57 @@ void Renderer::draw_chat(ImDrawList* dl, const Config& config, const Viewport& v
     if (visible.empty()) return;
     if (cc.order == ChatOrder::NewestBottom) std::reverse(visible.begin(), visible.end());
 
-    // Wrap first so the panel is sized to what is actually drawn.
-    struct Line {
-        std::string prefix;
-        Color prefix_color;
-        std::vector<std::string> body;
+    // Flatten every message into a list of *visual* lines up front. Laying out first and drawing
+    // second is what guarantees the panel is exactly as tall as its contents and that no two
+    // lines can ever land on the same y -- they previously overlapped because the height and the
+    // drawing advanced independently.
+    struct VisualLine {
+        std::string prefix;   ///< timestamp / icon / sender, only on a message's first line
+        Color prefix_color{};
+        std::string body;
     };
-    std::vector<Line> lines;
-    lines.reserve(visible.size());
-    std::size_t total_lines = 0;
-
-    const MeasureFn measure = [](std::string_view text, float size) {
-        return measure_text(text, size);
-    };
+    std::vector<VisualLine> lines;
+    lines.reserve(visible.size() * 2);
 
     for (const ChatMessage* message : visible) {
-        Line line;
-        if (cc.show_timestamp) line.prefix += format_clock(message->timestamp_ms) + " ";
-        if (cc.show_category_icon) line.prefix += std::string(category_label(message->category)) + " ";
+        std::string prefix;
+        if (cc.show_timestamp) prefix += format_clock(message->timestamp_ms) + " ";
+        if (cc.show_category_icon) prefix += std::string(category_label(message->category)) + " ";
         if (cc.show_channel_name && !message->channel_name.empty()) {
-            line.prefix += "[" + message->channel_name + "] ";
+            prefix += "[" + message->channel_name + "] ";
         }
-        if (cc.show_sender) line.prefix += message->sender_name + ": ";
+        if (cc.show_sender) prefix += message->sender_name + ": ";
 
-        line.prefix_color = cc.sender;
+        Color prefix_color = cc.sender;
         if (cc.use_sender_color) {
             if (const UserOverride* ov = config.find_user_override(message->sender_unique_id)) {
-                if (ov->name_color) line.prefix_color = *ov->name_color;
+                if (ov->name_color) prefix_color = *ov->name_color;
             }
         }
 
-        std::string text = json::truncate_utf8(
+        const std::string text = json::truncate_utf8(
             message->text, static_cast<std::size_t>(cc.max_message_length));
-        const float prefix_width = measure_text(line.prefix, font);
-        const float body_width = std::max(40.0f, width - pad_x * 2.0f - prefix_width);
+        const float prefix_width = measure_text(prefix, font);
+        const float body_budget = std::max(30.0f, text_width - prefix_width);
+
         if (cc.wrap) {
             const FittedText fitted =
-                fit_text(text, body_width, font, OverflowMode::Wrap, 0.75f, measure);
-            line.body = fitted.lines;
+                fit_text(text, body_budget, font, OverflowMode::Wrap, 0.75f, measure);
+            bool first = true;
+            for (const std::string& body : fitted.lines) {
+                lines.push_back({first ? prefix : std::string(),
+                                 first ? prefix_color : cc.text, body});
+                first = false;
+            }
+            if (fitted.lines.empty()) lines.push_back({prefix, prefix_color, std::string()});
         } else {
             const FittedText fitted =
-                fit_text(text, body_width, font, OverflowMode::Ellipsis, 0.75f, measure);
-            line.body = {fitted.text};
+                fit_text(text, body_budget, font, OverflowMode::Ellipsis, 0.75f, measure);
+            lines.push_back({prefix, prefix_color, fitted.text});
         }
-        total_lines += line.body.size();
-        lines.push_back(std::move(line));
     }
 
-    const float height = static_cast<float>(total_lines) * line_height + pad_y * 2.0f;
+    const float height = static_cast<float>(lines.size()) * line_height + pad_y * 2.0f;
     const Rect area = resolve_placement(cc.placement, width, height, viewport);
 
     if (cc.show_background) {
@@ -622,23 +656,29 @@ void Renderer::draw_chat(ImDrawList* dl, const Config& config, const Viewport& v
                    packed(cc.background, opacity), 0u, 0.0f);
     }
 
+    // Alignment applies to chat as well: right-aligned means every line ends flush with the
+    // panel's right edge and grows leftward.
+    const Align align = cc.placement.align;
     float y = area.y + pad_y;
-    for (const Line& line : lines) {
+    for (const VisualLine& line : lines) {
+        const float prefix_w = measure_text(line.prefix, font);
+        const float body_w = measure_text(line.body, font);
+        const float total = prefix_w + body_w;
+
         float x = area.x + pad_x;
+        if (align == Align::Right) x = area.x + area.w - pad_x - total;
+        else if (align == Align::Center) x = area.x + (area.w - total) * 0.5f;
+
         if (!line.prefix.empty()) {
             draw_text(dl, config, x, y, font, packed(line.prefix_color, opacity), line.prefix);
-            x += measure_text(line.prefix, font);
+            x += prefix_w;
         }
-        bool first = true;
-        for (const std::string& body : line.body) {
-            // Message text is drawn as literal text: no markup, escape or URL in it is ever
-            // interpreted, so a chat message cannot influence anything but its own glyphs.
-            draw_text(dl, config, first ? x : area.x + pad_x, y, font, packed(cc.text, opacity),
-                      body);
-            y += line_height;
-            first = false;
+        // Message text is drawn as literal text: no markup, escape or URL in it is ever
+        // interpreted, so a chat message cannot influence anything but its own glyphs.
+        if (!line.body.empty()) {
+            draw_text(dl, config, x, y, font, packed(cc.text, opacity), line.body);
         }
-        if (line.body.empty()) y += line_height;
+        y += line_height;
     }
 }
 

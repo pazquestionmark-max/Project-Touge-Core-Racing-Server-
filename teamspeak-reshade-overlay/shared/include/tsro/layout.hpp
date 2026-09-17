@@ -60,7 +60,9 @@ FittedText fit_text(std::string_view text, float max_width, float font_size, Ove
 /// The visual treatment of one user, after per-user overrides and state priority are applied.
 struct ResolvedUser {
     const UserState* user = nullptr;
-    std::string display;        ///< after per-user display override
+    std::string display;        ///< after the friend tag and any per-user display override
+    bool is_friend = false;
+    std::string friend_tag;     ///< "[tag] " including brackets and trailing space, or empty        ///< after per-user display override
     Color name_color{};
     float entry_opacity = 1.0f;
     bool show_border = false;
@@ -108,6 +110,10 @@ std::string format_template(std::string_view tmpl, const FormatValues& v);
 struct ChannelTitleLayout {
     bool visible = false;
     Rect rect;
+    /// The alignment that actually applies: the group's when the blocks are linked, this
+    /// element's own otherwise. Resolved here so the renderer cannot disagree with the layout
+    /// about which one wins -- it previously read the element's own and ignored the group's.
+    Align align = Align::Left;
     std::string text;
     Color text_color{};
     Color background{};
@@ -130,6 +136,7 @@ struct UserRowLayout {
 struct UserListLayout {
     bool visible = false;
     Rect rect;
+    Align align = Align::Left;
     std::vector<UserRowLayout> rows;
     int hidden_count = 0;
     std::string overflow_text;

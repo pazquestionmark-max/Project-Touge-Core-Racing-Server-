@@ -275,6 +275,8 @@ void read(const R& r, NotificationStyle& n) {
 json::Value write(const UserOverride& u) {
     json::Value o{json::Object{}};
     o.set("enabled", json::Value(u.enabled));
+    if (u.is_friend) o.set("is_friend", json::Value(true));
+    if (!u.friend_tag.empty()) o.set("friend_tag", json::Value(u.friend_tag));
     if (u.name_color) o.set("name_color", json::Value(u.name_color->to_hex()));
     if (u.speaking_color) o.set("speaking_color", json::Value(u.speaking_color->to_hex()));
     if (u.muted_color) o.set("muted_color", json::Value(u.muted_color->to_hex()));
@@ -288,6 +290,8 @@ json::Value write(const UserOverride& u) {
 
 void read(const R& r, UserOverride& u) {
     r.b("enabled", u.enabled);
+    r.b("is_friend", u.is_friend);
+    r.s("friend_tag", u.friend_tag, 32);
     r.ocol("name_color", u.name_color);
     r.ocol("speaking_color", u.speaking_color);
     r.ocol("muted_color", u.muted_color);
@@ -443,6 +447,10 @@ json::Value Config::to_json() const {
         o.set("show_overflow_count", json::Value(u.show_overflow_count));
         o.set("show_avatar_initial", json::Value(u.show_avatar_initial));
         o.set("indicator_gap", json::Value(u.indicator_gap));
+        o.set("color_friends", json::Value(u.color_friends));
+        o.set("friend_color", json::Value(u.friend_color.to_hex()));
+        o.set("show_friend_tag", json::Value(u.show_friend_tag));
+        o.set("friend_tag_color", json::Value(u.friend_tag_color.to_hex()));
         root.set("user_list", std::move(o));
     }
     {
@@ -666,6 +674,10 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         u.b("show_overflow_count", x.show_overflow_count);
         u.b("show_avatar_initial", x.show_avatar_initial);
         u.f("indicator_gap", x.indicator_gap, 0.0f, 64.0f);
+        u.b("color_friends", x.color_friends);
+        u.col("friend_color", x.friend_color);
+        u.b("show_friend_tag", x.show_friend_tag);
+        u.col("friend_tag_color", x.friend_tag_color);
     }
     {
         const R i = r.sub("indicators");

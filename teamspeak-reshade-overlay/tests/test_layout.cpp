@@ -726,3 +726,79 @@ TEST(layout, the_group_never_leaves_the_viewport_even_when_over_wide) {
     CHECK(r.title.rect.x >= -0.01f);
     CHECK(r.users.rect.y >= -0.01f);
 }
+
+// --- friends ----------------------------------------------------------------------------------
+
+TEST(layout, a_friend_gets_their_tag_in_front_of_their_name) {
+    Config cfg = Config::defaults();
+    UserOverride ov;
+    ov.is_friend = true;
+    ov.friend_tag = "Chief";
+    cfg.user_overrides["a="] = ov;
+
+    const ResolvedUser r = resolve_user(make_user("a=", "Alice"), cfg, 0.0f);
+    CHECK_EQ(r.display, std::string("[Chief] Alice"));
+    CHECK(r.is_friend);
+    CHECK_EQ(r.friend_tag, std::string("[Chief] "));
+    CHECK_EQ(r.name_color.to_hex(), cfg.user_list.friend_color.to_hex());
+}
+
+TEST(layout, a_friend_without_a_tag_is_only_recoloured) {
+    Config cfg = Config::defaults();
+    UserOverride ov;
+    ov.is_friend = true;
+    cfg.user_overrides["a="] = ov;
+
+    const ResolvedUser r = resolve_user(make_user("a=", "Alice"), cfg, 0.0f);
+    CHECK_EQ(r.display, std::string("Alice"));
+    CHECK(r.friend_tag.empty());
+    CHECK_EQ(r.name_color.to_hex(), cfg.user_list.friend_color.to_hex());
+}
+
+TEST(layout, an_explicit_name_colour_beats_the_friend_colour) {
+    Config cfg = Config::defaults();
+    UserOverride ov;
+    ov.is_friend = true;
+    ov.name_color = Color{255, 0, 255, 255};
+    cfg.user_overrides["a="] = ov;
+
+    CHECK_EQ(resolve_user(make_user("a=", "Alice"), cfg, 0.0f).name_color.to_hex(),
+             std::string("#FF00FFFF"));
+}
+
+TEST(layout, friend_styling_can_be_switched_off) {
+    Config cfg = Config::defaults();
+    cfg.user_list.color_friends = false;
+    cfg.user_list.show_friend_tag = false;
+    UserOverride ov;
+    ov.is_friend = true;
+    ov.friend_tag = "Chief";
+    cfg.user_overrides["a="] = ov;
+
+    const ResolvedUser r = resolve_user(make_user("a=", "Alice"), cfg, 0.0f);
+    CHECK_EQ(r.display, std::string("Alice"));
+    CHECK_EQ(r.name_color.to_hex(), cfg.appearance.text_default.to_hex());
+}
+
+TEST(layout, the_resolved_alignment_follows_the_group_when_linked) {
+    // The bug this guards: the renderer read the element's own alignment and ignored the
+    // group's, so a right-aligned group still drew its rows left-aligned.
+    Config cfg = Config::defaults();
+    cfg.group.enabled = true;
+    cfg.group.align = Align::Right;
+    cfg.user_list.placement.align = Align::Left;
+    cfg.channel_title.placement.align = Align::Left;
+
+    const OverlayState state = connected_state({make_user("a=", "Alice")});
+    const LayoutResult r =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+    CHECK(r.users.align == Align::Right);
+    CHECK(r.title.align == Align::Right);
+
+    // Unlinked, each element's own alignment applies again.
+    cfg.group.enabled = false;
+    const LayoutResult unlinked =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+    CHECK(unlinked.users.align == Align::Left);
+    CHECK(unlinked.title.align == Align::Left);
+}

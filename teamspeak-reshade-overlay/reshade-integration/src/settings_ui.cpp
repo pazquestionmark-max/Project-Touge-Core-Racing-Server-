@@ -492,6 +492,24 @@ void SettingsUi::tab_users(Config& config, const OverlayFrame& frame, SettingsAc
         "Per-user settings are keyed on the TeamSpeak identity, so they survive nickname "
         "changes and reconnects. Two people cannot collide on one entry.");
 
+    ImGui::SeparatorText("Friends");
+    ImGui::TextWrapped(
+        "TeamSpeak's own friend list cannot be read by a plugin -- it lives in the client's local "
+        "Contacts database and is not part of the plugin API. Mark people as friends here "
+        "instead; it is keyed on the same TeamSpeak identity as everything else, so it survives "
+        "nickname changes and reconnects.");
+    actions.config_changed |=
+        ImGui::Checkbox("Colour friends differently", &config.user_list.color_friends);
+    if (config.user_list.color_friends) {
+        actions.config_changed |= colour_edit("Friend colour", config.user_list.friend_color);
+        ImGui::TextDisabled("A friend's own name colour, if you set one, still wins.");
+    }
+    actions.config_changed |=
+        ImGui::Checkbox("Show the friend's nickname as [Name]", &config.user_list.show_friend_tag);
+    if (config.user_list.show_friend_tag) {
+        actions.config_changed |= colour_edit("Tag colour", config.user_list.friend_tag_color);
+    }
+
     ImGui::SeparatorText("People in your channel");
     if (frame.state.users.empty()) {
         ImGui::TextDisabled("Nobody visible. Connect TeamSpeak and join a channel to add entries "
@@ -511,6 +529,17 @@ void SettingsUi::tab_users(Config& config, const OverlayFrame& frame, SettingsAc
             config.user_overrides[user.unique_id] = created;
             actions.config_changed = true;
         }
+        if (!exists) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Add as friend")) {
+                UserOverride created;
+                created.is_friend = true;
+                created.friend_tag = user.display_name;
+                created.note = user.display_name;
+                config.user_overrides[user.unique_id] = created;
+                actions.config_changed = true;
+            }
+        }
         ImGui::PopID();
     }
 
@@ -527,6 +556,16 @@ void SettingsUi::tab_users(Config& config, const OverlayFrame& frame, SettingsAc
             override_entry.note.empty() ? unique_id : override_entry.note + "  (" + unique_id + ")";
         if (ImGui::TreeNode(label.c_str())) {
             actions.config_changed |= ImGui::Checkbox("Enabled", &override_entry.enabled);
+            actions.config_changed |= ImGui::Checkbox("Friend", &override_entry.is_friend);
+            if (override_entry.is_friend) {
+                char tag[33];
+                std::snprintf(tag, sizeof(tag), "%s", override_entry.friend_tag.c_str());
+                if (ImGui::InputText("Friend nickname", tag, sizeof(tag))) {
+                    override_entry.friend_tag = tag;
+                    actions.config_changed = true;
+                }
+                help("Shown as [Friend nickname] in front of their TeamSpeak name.");
+            }
 
             char note[201];
             std::snprintf(note, sizeof(note), "%s", override_entry.note.c_str());
