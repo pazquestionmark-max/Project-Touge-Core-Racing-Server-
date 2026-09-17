@@ -369,6 +369,8 @@ json::Value Config::to_json() const {
     {
         const AppearanceConfig& a = appearance;
         json::Value o{json::Object{}};
+        o.set("font_file", json::Value(a.font_file));
+        o.set("font_face_index", json::Value(a.font_face_index));
         o.set("font_index", json::Value(a.font_index));
         o.set("font_size", json::Value(a.font_size));
         o.set("icon_size", json::Value(a.icon_size));
@@ -438,6 +440,7 @@ json::Value Config::to_json() const {
         o.set("highlight_local_user", json::Value(u.highlight_local_user));
         o.set("local_user_color", json::Value(u.local_user_color.to_hex()));
         o.set("show_muted_users", json::Value(u.show_muted_users));
+        o.set("only_show_talking", json::Value(u.only_show_talking));
         o.set("speaking_first", json::Value(u.speaking_first));
         o.set("sort", json::Value(to_string(u.sort)));
         o.set("name_overflow", json::Value(to_string(u.name_overflow)));
@@ -477,8 +480,24 @@ json::Value Config::to_json() const {
         o.set("spacing", json::Value(n.spacing));
         o.set("width", json::Value(n.width));
         o.set("min_height", json::Value(n.min_height));
+        {
+            const NotificationBoxStyle& b = n.box;
+            json::Value bo{json::Object{}};
+            bo.set("background", json::Value(b.background.to_hex()));
+            bo.set("corner_radius", json::Value(b.corner_radius));
+            bo.set("border", json::Value(to_string(b.border)));
+            bo.set("border_color", json::Value(b.border_color.to_hex()));
+            bo.set("border_thickness", json::Value(b.border_thickness));
+            bo.set("border_accent_opacity", json::Value(b.border_accent_opacity));
+            bo.set("accent_bar", json::Value(b.accent_bar));
+            bo.set("accent_bar_width", json::Value(b.accent_bar_width));
+            bo.set("auto_width", json::Value(b.auto_width));
+            bo.set("max_width", json::Value(b.max_width));
+            o.set("box", std::move(bo));
+        }
         o.set("padding_x", json::Value(n.padding_x));
         o.set("padding_y", json::Value(n.padding_y));
+        o.set("font_scale", json::Value(n.font_scale));
         o.set("merge_duplicates", json::Value(n.merge_duplicates));
         o.set("suppress_after_connect_ms", json::Value(n.suppress_after_connect_ms));
         o.set("join", write(n.join));
@@ -598,6 +617,8 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
     {
         const R a = r.sub("appearance");
         AppearanceConfig& x = c.appearance;
+        a.s("font_file", x.font_file, 260);
+        a.i("font_face_index", x.font_face_index, 0, 64);
         a.i("font_index", x.font_index, 0, 32);
         a.f("font_size", x.font_size, 6.0f, 96.0f);
         a.f("icon_size", x.icon_size, 2.0f, 96.0f);
@@ -664,6 +685,7 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         u.b("highlight_local_user", x.highlight_local_user);
         u.col("local_user_color", x.local_user_color);
         u.b("show_muted_users", x.show_muted_users);
+        u.b("only_show_talking", x.only_show_talking);
         u.b("speaking_first", x.speaking_first);
         u.en("sort", x.sort);
         u.en("name_overflow", x.name_overflow);
@@ -702,8 +724,23 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         n.f("spacing", x.spacing, 0.0f, 64.0f);
         n.f("width", x.width, 80.0f, 2000.0f);
         n.f("min_height", x.min_height, 8.0f, 400.0f);
+        {
+            const R b = n.sub("box");
+            NotificationBoxStyle& y = x.box;
+            b.col("background", y.background);
+            b.f("corner_radius", y.corner_radius, 0.0f, 32.0f);
+            b.en("border", y.border);
+            b.col("border_color", y.border_color);
+            b.f("border_thickness", y.border_thickness, 0.0f, 8.0f);
+            b.f("border_accent_opacity", y.border_accent_opacity, 0.0f, 1.0f);
+            b.b("accent_bar", y.accent_bar);
+            b.f("accent_bar_width", y.accent_bar_width, 0.0f, 16.0f);
+            b.b("auto_width", y.auto_width);
+            b.f("max_width", y.max_width, 80.0f, 2000.0f);
+        }
         n.f("padding_x", x.padding_x, 0.0f, 64.0f);
         n.f("padding_y", x.padding_y, 0.0f, 64.0f);
+        n.f("font_scale", x.font_scale, 0.4f, 4.0f);
         n.b("merge_duplicates", x.merge_duplicates);
         n.i("suppress_after_connect_ms", x.suppress_after_connect_ms, 0, 60000);
         read(n.sub("join"), x.join);

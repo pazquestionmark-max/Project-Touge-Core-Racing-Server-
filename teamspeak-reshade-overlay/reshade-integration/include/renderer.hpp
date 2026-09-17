@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "font_engine.hpp"
 #include "tsro/config.hpp"
 #include "tsro/layout.hpp"
 #include "tsro/notifications.hpp"
@@ -31,7 +32,7 @@ namespace tsro::overlay {
 /// something that can simply be assumed to work. `Estimated` means neither table entry returned
 /// a usable width and the overlay is running on a codepoint estimate -- still readable, but the
 /// edges will be a few pixels out. The debug panel shows this.
-enum class TextMetricsSource { Unknown, CalcTextSize, CalcTextSizeA, Estimated };
+enum class TextMetricsSource { Unknown, OwnFont, CalcTextSize, CalcTextSizeA, Estimated };
 
 TextMetricsSource text_metrics_source() noexcept;
 const char* text_metrics_source_name(TextMetricsSource source) noexcept;
@@ -57,6 +58,10 @@ public:
     void draw(ImDrawList* draw_list, const Config& config, const OverlayFrame& frame,
               const Viewport& viewport, std::int64_t now_ms, const OverlayState* preview,
               const std::vector<ChatMessage>* preview_chat_messages);
+
+    /// The overlay's own typeface, or nullptr to draw with ReShade's font. Set once at startup;
+    /// the renderer only reads it, and falls back whenever the engine cannot serve a size.
+    void set_font_engine(FontEngine* fonts) noexcept;
 
     /// Feeds semantic events into the notification queue. Called before draw, on the same thread.
     void submit_events(const std::vector<OverlayEvent>& events, const Config& config,

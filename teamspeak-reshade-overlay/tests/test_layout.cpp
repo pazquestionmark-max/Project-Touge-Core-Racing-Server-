@@ -802,3 +802,36 @@ TEST(layout, the_resolved_alignment_follows_the_group_when_linked) {
     CHECK(unlinked.users.align == Align::Left);
     CHECK(unlinked.title.align == Align::Left);
 }
+
+TEST(layout, stealth_mode_keeps_only_the_people_who_are_talking) {
+    Config cfg = Config::defaults();
+    cfg.user_list.only_show_talking = true;
+
+    UserState quiet = make_user("a=", "Alice");
+    UserState loud = make_user("b=", "Bob");
+    loud.talking = true;
+    UserState me = make_user("c=", "Me");
+    me.is_self = true;
+
+    const OverlayState state = connected_state({quiet, loud, me});
+    const std::vector<const UserState*> shown = order_users(state, cfg);
+
+    // Your own row survives, so the overlay does not disappear entirely while you are the only
+    // one speaking and there is nothing else to draw.
+    CHECK_EQ(shown.size(), static_cast<std::size_t>(2));
+    bool has_bob = false;
+    bool has_self = false;
+    for (const UserState* u : shown) {
+        if (u->unique_id == "b=") has_bob = true;
+        if (u->is_self) has_self = true;
+    }
+    CHECK(has_bob);
+    CHECK(has_self);
+}
+
+TEST(layout, stealth_mode_off_keeps_everyone) {
+    Config cfg = Config::defaults();
+    const OverlayState state =
+        connected_state({make_user("a=", "Alice"), make_user("b=", "Bob")});
+    CHECK_EQ(order_users(state, cfg).size(), static_cast<std::size_t>(2));
+}

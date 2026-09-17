@@ -105,6 +105,12 @@ constexpr std::array<std::pair<StackDirection, const char*>, 2> kStacks{{
     {StackDirection::Down, "down"}, {StackDirection::Up, "up"},
 }};
 
+constexpr std::array<std::pair<NotificationBorder, const char*>, 3> kNotifBorders{{
+    {NotificationBorder::None, "none"},
+    {NotificationBorder::Accent, "accent"},
+    {NotificationBorder::Custom, "custom"},
+}};
+
 int hex_digit(char c) noexcept {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -123,6 +129,7 @@ const char* to_string(UserSort v) noexcept { return lookup(kSorts, v); }
 const char* to_string(SpeakingAnimation v) noexcept { return lookup(kSpeakAnims, v); }
 const char* to_string(ChatOrder v) noexcept { return lookup(kChatOrders, v); }
 const char* to_string(StackDirection v) noexcept { return lookup(kStacks, v); }
+const char* to_string(NotificationBorder v) noexcept { return lookup(kNotifBorders, v); }
 
 bool parse_enum(std::string_view s, Anchor& o) noexcept { return lookup_parse(kAnchors, s, o); }
 bool parse_enum(std::string_view s, Align& o) noexcept { return lookup_parse(kAligns, s, o); }
@@ -140,6 +147,9 @@ bool parse_enum(std::string_view s, ChatOrder& o) noexcept {
 }
 bool parse_enum(std::string_view s, StackDirection& o) noexcept {
     return lookup_parse(kStacks, s, o);
+}
+bool parse_enum(std::string_view s, NotificationBorder& o) noexcept {
+    return lookup_parse(kNotifBorders, s, o);
 }
 
 std::optional<Color> Color::from_hex(std::string_view s) {

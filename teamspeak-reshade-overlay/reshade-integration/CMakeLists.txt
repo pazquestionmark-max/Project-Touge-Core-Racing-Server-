@@ -53,6 +53,7 @@ message(STATUS "ReShade add-on: Dear ImGui ${TSRO_IMGUI_VERSION} (docking) match
 
 add_library(tsro_addon SHARED
   src/addon.cpp
+  src/font_engine.cpp
   src/renderer.cpp
   src/settings_ui.cpp
   src/icons.cpp

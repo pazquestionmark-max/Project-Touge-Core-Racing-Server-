@@ -59,6 +59,7 @@ SOURCES=(
   teamspeak-plugin/src/ts_state.cpp
   teamspeak-plugin/src/ts_query_ts3.cpp
   reshade-integration/src/icons.cpp
+  reshade-integration/src/font_engine.cpp
   reshade-integration/src/renderer.cpp
   reshade-integration/src/settings_ui.cpp
 )

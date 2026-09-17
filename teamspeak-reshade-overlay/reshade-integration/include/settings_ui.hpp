@@ -42,7 +42,19 @@ public:
     void refresh_profiles(ProfileStore& profiles);
     void set_status(std::string message, bool error);
 
+    /// The overlay's own font engine, so the typeface list can be shown and rescanned. May be
+    /// null, in which case the font controls say why they are unavailable.
+    void set_font_engine(FontEngine* fonts) noexcept { fonts_ = fonts; }
+
 private:
+    /// The default view: one scrolling list of collapsible sections, a control per line. Tabs
+    /// are a poor fit for a handful of everyday settings, so they are kept for Advanced.
+    void basic_view(Config& config, const LinkDiagnostics& diagnostics, const OverlayFrame& frame,
+                    ProfileStore& profiles, const FrameStats& stats,
+                    const ConfigDiagnostics& config_diagnostics, SettingsActions& actions);
+    void section_typography(Config& config, SettingsActions& actions);
+    void section_notification_box(Config& config, SettingsActions& actions);
+
     void tab_general(Config& config, SettingsActions& actions);
     void tab_appearance(Config& config, SettingsActions& actions);
     void tab_layout(Config& config, SettingsActions& actions);
@@ -68,6 +80,7 @@ private:
     char user_filter_[64] = "";
     char executable_name_[128] = "";
     int selected_profile_ = 0;
+    FontEngine* fonts_ = nullptr;
 };
 
 }  // namespace tsro::overlay

@@ -72,6 +72,13 @@ enum class ChatOrder { NewestBottom, NewestTop };
 
 enum class StackDirection { Down, Up };
 
+/// How a notification box's edge is drawn. Defined here so the enum helpers below can name it.
+enum class NotificationBorder {
+    None,
+    Accent,   ///< the category's own colour, dimmed -- each toast is outlined in its own hue
+    Custom,   ///< one colour for every category
+};
+
 const char* to_string(Anchor) noexcept;
 const char* to_string(Align) noexcept;
 const char* to_string(IconShape) noexcept;
@@ -81,6 +88,7 @@ const char* to_string(UserSort) noexcept;
 const char* to_string(SpeakingAnimation) noexcept;
 const char* to_string(ChatOrder) noexcept;
 const char* to_string(StackDirection) noexcept;
+const char* to_string(NotificationBorder) noexcept;
 
 bool parse_enum(std::string_view, Anchor&) noexcept;
 bool parse_enum(std::string_view, Align&) noexcept;
@@ -91,6 +99,7 @@ bool parse_enum(std::string_view, UserSort&) noexcept;
 bool parse_enum(std::string_view, SpeakingAnimation&) noexcept;
 bool parse_enum(std::string_view, ChatOrder&) noexcept;
 bool parse_enum(std::string_view, StackDirection&) noexcept;
+bool parse_enum(std::string_view, NotificationBorder&) noexcept;
 
 /// Applies `easing` to t∈[0,1].
 float ease(Easing, float t) noexcept;
@@ -156,10 +165,18 @@ struct GeneralConfig {
 };
 
 struct AppearanceConfig {
-    /// Which of ReShade's loaded fonts to draw with. ReShade owns the ImGui font atlas, so the
-    /// add-on cannot load a typeface of its own without fighting it for the atlas. What it can
-    /// do is pick among the fonts ReShade itself loaded, which is what this indexes. The
-    /// Appearance tab lists them by name and says where to add more.
+    /// The typeface the HUD draws with, as a file name inside the overlay's `fonts` folder
+    /// (see docs/configuration.md). Empty means ReShade's own font.
+    ///
+    /// The add-on rasterises this itself rather than asking ReShade for it: ReShade owns the
+    /// ImGui font atlas, and reading that atlas from an add-on is what crashed the game the
+    /// first time this was attempted. Loading the .ttf here touches none of ReShade's ImGui
+    /// state -- it produces a texture of our own and draws glyph quads from it -- so the font
+    /// applies to the overlay alone and leaves ReShade's own UI untouched.
+    std::string font_file;
+    /// Face index inside a .ttc collection. 0 for an ordinary .ttf/.otf.
+    int font_face_index = 0;
+    /// Retained only so an older profile still loads; superseded by font_file.
     int font_index = 0;
     float font_size = 15.0f;
     float icon_size = 8.0f;
@@ -221,6 +238,9 @@ struct UserListConfig {
     bool highlight_local_user = true;
     Color local_user_color{255, 214, 102, 255};
     bool show_muted_users = true;
+    /// Show only people who are actually talking. Turns the roster into a speaking indicator,
+    /// which is what you want when the overlay is competing with a busy game for screen space.
+    bool only_show_talking = false;
     bool speaking_first = false;
     UserSort sort = UserSort::Alphabetical;
     OverflowMode name_overflow = OverflowMode::Ellipsis;
@@ -256,16 +276,41 @@ struct NotificationStyle {
     std::string sound_file;
 };
 
+/// The box every notification is drawn in.
+///
+/// Separate from the per-category colours so the *shape* of a toast -- how dark it is, how sharp
+/// its corners are, whether it carries an edge -- is one setting rather than six.
+struct NotificationBoxStyle {
+    Color background{10, 12, 16, 235};
+    /// 0 is a hard rectangle. Small values read as a panel; large ones as a pill.
+    float corner_radius = 2.0f;
+    NotificationBorder border = NotificationBorder::Accent;
+    Color border_color{255, 255, 255, 48};
+    float border_thickness = 1.0f;
+    /// How strongly the category colour shows in the edge when `border` is Accent.
+    float border_accent_opacity = 0.55f;
+    /// The vertical stripe down the leading edge, in the category's colour.
+    bool accent_bar = true;
+    float accent_bar_width = 3.0f;
+    /// Size each toast to its own text instead of a fixed column, as the reference layout does.
+    bool auto_width = true;
+    float max_width = 560.0f;
+};
+
 struct NotificationsConfig {
     Placement placement{true, Anchor::TopRight, 24.0f, 24.0f, false, Align::Right};
     int max_visible = 5;
     StackDirection stack = StackDirection::Down;
     float spacing = 6.0f;
+    /// Used when box.auto_width is off, and as the minimum width when it is on.
     float width = 280.0f;
     float min_height = 26.0f;
+    NotificationBoxStyle box{};
     /// Independent of appearance.padding_*, which the user list may legitimately set to zero.
     float padding_x = 10.0f;
     float padding_y = 6.0f;
+    /// Notification text size, relative to appearance.font_size.
+    float font_scale = 1.0f;
     bool merge_duplicates = true;
     /// Events arriving within this window of a (re)connection are absorbed into the initial
     /// synchronisation instead of producing a burst of join notifications.

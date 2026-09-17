@@ -1198,12 +1198,381 @@ void SettingsUi::tab_diagnostics(const LinkDiagnostics& diagnostics, const Overl
                        "contents of chat messages to a file on disk.");
 }
 
+void SettingsUi::section_typography(Config& config, SettingsActions& actions) {
+    AppearanceConfig& a = config.appearance;
+
+    if (fonts_ == nullptr) {
+        ImGui::TextDisabled("The font engine is not available in this build.");
+    } else {
+        // The list is of files the add-on rasterises itself. It deliberately does not touch
+        // ReShade's font atlas: reading that atlas from an add-on is what crashed the game the
+        // first time a font picker was attempted here, and the two are now fully independent --
+        // this setting changes the overlay only, never ReShade's own interface.
+        const std::vector<FontFile>& files = fonts_->available();
+        std::string current = a.font_file.empty() ? std::string("ReShade's font") : a.font_file;
+        for (const FontFile& f : files) {
+            if (f.file == a.font_file && f.face_index == a.font_face_index) {
+                current = f.label();
+                break;
+            }
+        }
+        if (ImGui::BeginCombo("Font", current.c_str())) {
+            if (ImGui::Selectable("ReShade's font", a.font_file.empty())) {
+                a.font_file.clear();
+                a.font_face_index = 0;
+                actions.config_changed = true;
+            }
+            for (const FontFile& f : files) {
+                const bool selected = f.file == a.font_file && f.face_index == a.font_face_index;
+                ImGui::PushID(f.file.c_str());
+                ImGui::PushID(f.face_index);
+                if (ImGui::Selectable(f.label().c_str(), selected)) {
+                    a.font_file = f.file;
+                    a.font_face_index = f.face_index;
+                    actions.config_changed = true;
+                }
+                ImGui::PopID();
+                ImGui::PopID();
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::Button("Rescan fonts folder")) fonts_->rescan();
+        ImGui::SameLine();
+        ImGui::TextDisabled("%d found", static_cast<int>(files.size()));
+        for (const std::string& dir : fonts_->directories()) {
+            ImGui::TextDisabled("%s", dir.c_str());
+        }
+        if (!fonts_->error().empty()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.4f, 1.0f), "%s", fonts_->error().c_str());
+        }
+    }
+
+    // The three sizes are shown in pixels because that is how people think about them, and
+    // written back as the multipliers the layout actually uses.
+    float header_px = a.font_size * config.channel_title.font_scale;
+    if (ImGui::SliderFloat("Channel header font size", &header_px, 6.0f, 64.0f, "%.0f px")) {
+        config.channel_title.font_scale = header_px / std::max(1.0f, a.font_size);
+        actions.config_changed = true;
+    }
+    actions.config_changed |=
+        ImGui::SliderFloat("User list font size", &a.font_size, 6.0f, 64.0f, "%.0f px");
+    float notif_px = a.font_size * config.notifications.font_scale;
+    if (ImGui::SliderFloat("Notifications font size", &notif_px, 6.0f, 64.0f, "%.0f px")) {
+        config.notifications.font_scale = notif_px / std::max(1.0f, a.font_size);
+        actions.config_changed = true;
+    }
+    actions.config_changed |=
+        ImGui::SliderFloat("Icon scale", &a.icon_size, 2.0f, 32.0f, "%.0f px");
+    actions.config_changed |=
+        ImGui::SliderFloat("Row height", &a.row_height, 8.0f, 64.0f, "%.0f px");
+    actions.config_changed |= ImGui::SliderFloat("Overall scale", &config.general.scale, 0.5f,
+                                                 3.0f, "%.2fx");
+    actions.config_changed |= ImGui::Checkbox("Outline the text", &a.text_outline);
+    if (a.text_outline) {
+        actions.config_changed |= colour_edit("Outline colour", a.text_outline_color);
+        actions.config_changed |=
+            ImGui::SliderFloat("Outline thickness", &a.text_outline_thickness, 0.5f, 3.0f, "%.1f");
+    } else {
+        actions.config_changed |= ImGui::Checkbox("Drop shadow", &a.text_shadow);
+    }
+}
+
+void SettingsUi::section_notification_box(Config& config, SettingsActions& actions) {
+    NotificationsConfig& n = config.notifications;
+    NotificationBoxStyle& b = n.box;
+
+    actions.config_changed |= ImGui::Checkbox("Size each toast to its text", &b.auto_width);
+    help("On, a notification is only as wide as its message, the way a chat feed reads. Off, "
+         "every notification uses the fixed width below.");
+    if (b.auto_width) {
+        actions.config_changed |=
+            ImGui::SliderFloat("Widest toast", &b.max_width, 120.0f, 1200.0f, "%.0f px");
+    } else {
+        actions.config_changed |= ImGui::SliderFloat("Width", &n.width, 120.0f, 1200.0f, "%.0f px");
+    }
+
+    actions.config_changed |= colour_edit("Box colour", b.background);
+    help("Its alpha is how dark the box is over the game.");
+    actions.config_changed |=
+        ImGui::SliderFloat("Corner rounding", &b.corner_radius, 0.0f, 16.0f, "%.0f px");
+
+    constexpr NotificationBorder kBorders[] = {NotificationBorder::None,
+                                               NotificationBorder::Accent,
+                                               NotificationBorder::Custom};
+    actions.config_changed |= enum_combo("Edge", b.border, kBorders);
+    help("Accent outlines each toast in the colour of the event it is reporting, so a join and "
+         "a kick are distinguishable without reading them.");
+    if (b.border != NotificationBorder::None) {
+        actions.config_changed |=
+            ImGui::SliderFloat("Edge thickness", &b.border_thickness, 0.0f, 4.0f, "%.1f px");
+    }
+    if (b.border == NotificationBorder::Custom) {
+        actions.config_changed |= colour_edit("Edge colour", b.border_color);
+    } else if (b.border == NotificationBorder::Accent) {
+        actions.config_changed |= ImGui::SliderFloat("Edge strength", &b.border_accent_opacity,
+                                                     0.0f, 1.0f, "%.2f");
+    }
+
+    actions.config_changed |= ImGui::Checkbox("Category stripe", &b.accent_bar);
+    if (b.accent_bar) {
+        actions.config_changed |=
+            ImGui::SliderFloat("Stripe width", &b.accent_bar_width, 1.0f, 10.0f, "%.0f px");
+    }
+    actions.config_changed |=
+        ImGui::SliderFloat("Inner padding", &n.padding_x, 0.0f, 32.0f, "%.0f px");
+    actions.config_changed |=
+        ImGui::SliderFloat("Inner padding (vertical)", &n.padding_y, 0.0f, 32.0f, "%.0f px");
+    actions.config_changed |= ImGui::SliderFloat("Gap between", &n.spacing, 0.0f, 32.0f, "%.0f px");
+}
+
+void SettingsUi::basic_view(Config& config, const LinkDiagnostics& diagnostics,
+                            const OverlayFrame& frame, ProfileStore& profiles,
+                            const FrameStats& stats,
+                            const ConfigDiagnostics& config_diagnostics,
+                            SettingsActions& actions) {
+    AppearanceConfig& a = config.appearance;
+    UserListConfig& ul = config.user_list;
+    ChannelTitleConfig& title = config.channel_title;
+    NotificationsConfig& n = config.notifications;
+
+    actions.config_changed |= ImGui::Checkbox("Show the overlay", &config.general.enabled);
+    ImGui::SameLine();
+    ImGui::Checkbox("Demo mode", &preview_active_);
+    help("Draws sample users in every state, one of each notification and a sample chat feed, "
+         "so the layout can be positioned without waiting for anyone to speak. Nothing is sent "
+         "to TeamSpeak and no sound is played.");
+
+    if (ImGui::CollapsingHeader("TeamSpeak 3 status", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (diagnostics.state == LinkState::Connected) {
+            ImGui::TextColored(ImVec4(0.45f, 0.85f, 0.5f, 1.0f), "Connected");
+            const OverlayState& state = frame.state;
+            if (!state.server.name.empty()) ImGui::Text("Server: %s", state.server.name.c_str());
+            if (!state.channel.name.empty()) {
+                ImGui::Text("Channel: %s", state.channel.name.c_str());
+            }
+            ImGui::Text("Clients: %d", static_cast<int>(state.users.size()));
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.65f, 0.3f, 1.0f), "Not connected to the plugin");
+            ImGui::TextDisabled(
+                "Install the TeamSpeak plugin and make sure TeamSpeak is running. The overlay "
+                "retries on its own.");
+            if (ImGui::Button("Reconnect now")) actions.reconnect_requested = true;
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Typography & font engine", ImGuiTreeNodeFlags_DefaultOpen)) {
+        section_typography(config, actions);
+    }
+
+    if (ImGui::CollapsingHeader("HUD layout & positioning", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // Fractions of the screen rather than pixels, so a layout set at 1080p still lands in
+        // the same place at 1440p.
+        const auto place = [&](const char* label, Placement& p) {
+            ImGui::PushID(label);
+            bool changed = false;
+            if (!p.percent) {
+                // Migrate the stored pixel offsets the first time this view touches them, so the
+                // slider below is not showing a fraction while the config holds pixels.
+                p.percent = true;
+                p.x = std::min(0.995f, p.x / 1920.0f);
+                p.y = std::min(0.995f, p.y / 1080.0f);
+                changed = true;
+            }
+            changed |= ImGui::SliderFloat((std::string(label) + " X").c_str(), &p.x, 0.0f, 1.0f,
+                                          "%.3f");
+            changed |= ImGui::SliderFloat((std::string(label) + " Y").c_str(), &p.y, 0.0f, 1.0f,
+                                          "%.3f");
+            ImGui::PopID();
+            return changed;
+        };
+
+        actions.config_changed |= ImGui::Checkbox("Move the title and list together",
+                                                  &config.group.enabled);
+        if (config.group.enabled) {
+            actions.config_changed |= enum_combo("Anchor corner", config.group.anchor, kAnchors);
+            if (!config.group.percent) {
+                config.group.percent = true;
+                config.group.x = std::min(0.995f, config.group.x / 1920.0f);
+                config.group.y = std::min(0.995f, config.group.y / 1080.0f);
+                actions.config_changed = true;
+            }
+            actions.config_changed |=
+                ImGui::SliderFloat("User list X", &config.group.x, 0.0f, 1.0f, "%.3f");
+            actions.config_changed |=
+                ImGui::SliderFloat("User list Y", &config.group.y, 0.0f, 1.0f, "%.3f");
+            actions.config_changed |=
+                ImGui::SliderFloat("Block size", &config.group.scale, 0.4f, 3.0f, "%.2fx");
+            actions.config_changed |=
+                ImGui::SliderFloat("Gap under the title", &config.group.spacing, 0.0f, 40.0f,
+                                   "%.0f px");
+        } else {
+            actions.config_changed |= enum_combo("Title corner", title.placement.anchor, kAnchors);
+            actions.config_changed |= place("Title", title.placement);
+            actions.config_changed |= enum_combo("List corner", ul.placement.anchor, kAnchors);
+            actions.config_changed |= place("User list", ul.placement);
+        }
+
+        actions.config_changed |=
+            enum_combo("Notification corner", n.placement.anchor, kAnchors);
+        actions.config_changed |= place("Notifications", n.placement);
+
+        // One switch for the whole HUD: the alignment that matters is "which edge is fixed".
+        const Align current = config.group.enabled ? config.group.align : ul.placement.align;
+        bool right_aligned = current == Align::Right;
+        if (ImGui::Checkbox("Right-aligned layout", &right_aligned)) {
+            const Align chosen = right_aligned ? Align::Right : Align::Left;
+            config.group.align = chosen;
+            ul.placement.align = chosen;
+            title.placement.align = chosen;
+            n.placement.align = chosen;
+            config.chat.placement.align = chosen;
+            actions.config_changed = true;
+        }
+        help("Right means the right edge is the fixed point: longer names and longer channel "
+             "names grow leftward instead of running off the screen.");
+
+        actions.config_changed |= enum_combo("Sort mode", ul.sort, kSorts);
+        actions.config_changed |= ImGui::SliderInt("Max visible users", &ul.max_visible_users, 1, 64);
+        actions.config_changed |= ImGui::SliderFloat("Row spacing", &a.row_spacing, 0.0f, 24.0f,
+                                                     "%.0f px");
+        actions.config_changed |= ImGui::Checkbox("Show channel header", &title.placement.visible);
+        actions.config_changed |=
+            ImGui::Checkbox("Stealth mode (only show talking users)", &ul.only_show_talking);
+        actions.config_changed |=
+            ImGui::Checkbox("Highlight yourself in the channel", &ul.highlight_local_user);
+    }
+
+    if (ImGui::CollapsingHeader("Notifications & toasts", ImGuiTreeNodeFlags_DefaultOpen)) {
+        actions.config_changed |= ImGui::Checkbox("Show notifications", &n.placement.visible);
+        if (n.placement.visible) {
+            // Opacity is the alpha of the box colour, exposed on its own because "how dark is
+            // the box" is the thing people actually reach for.
+            float opacity = static_cast<float>(n.box.background.a) / 255.0f;
+            if (ImGui::SliderFloat("Toast background opacity", &opacity, 0.0f, 1.0f, "%.2f")) {
+                n.box.background.a = static_cast<std::uint8_t>(opacity * 255.0f + 0.5f);
+                actions.config_changed = true;
+            }
+            actions.config_changed |= ImGui::Checkbox("Show category accent bar", &n.box.accent_bar);
+            if (n.box.accent_bar) {
+                actions.config_changed |= ImGui::SliderFloat("Accent bar width",
+                                                             &n.box.accent_bar_width, 1.0f, 10.0f,
+                                                             "%.0f px");
+            }
+
+            // One duration for every category: six identical timers is not a setting, it is a
+            // chore. Advanced still exposes them individually.
+            float seconds = static_cast<float>(n.join.fade.hold_ms) / 1000.0f;
+            if (ImGui::SliderFloat("Toast duration", &seconds, 0.5f, 20.0f, "%.1fs")) {
+                const int ms = static_cast<int>(seconds * 1000.0f);
+                for (NotificationStyle* style : {&n.join, &n.leave, &n.channel_switch,
+                                                 &n.connection, &n.whisper, &n.chat}) {
+                    style->fade.hold_ms = ms;
+                }
+                actions.config_changed = true;
+            }
+
+            section_notification_box(config, actions);
+
+            ImGui::SeparatorText("Event filter toggles");
+            actions.config_changed |= ImGui::Checkbox("Channel joins (+)", &n.join.enabled);
+            actions.config_changed |= ImGui::Checkbox("Channel leaves (-)", &n.leave.enabled);
+            actions.config_changed |= ImGui::Checkbox("Channel moves", &n.channel_switch.enabled);
+            actions.config_changed |= ImGui::Checkbox("Connection changes", &n.connection.enabled);
+            actions.config_changed |= ImGui::Checkbox("Whispers", &n.whisper.enabled);
+            actions.config_changed |= ImGui::Checkbox("Chat messages", &n.chat.enabled);
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Chat")) {
+        if (ImGui::Checkbox("Show the chat feed", &config.chat.placement.visible)) {
+            actions.config_changed = true;
+            actions.subscription_changed = true;
+        }
+        if (config.chat.placement.visible) {
+            actions.config_changed |= enum_combo("Chat corner", config.chat.placement.anchor,
+                                                 kAnchors);
+            actions.config_changed |= ImGui::SliderFloat("Chat X", &config.chat.placement.x, 0.0f,
+                                                         3840.0f, "%.0f px");
+            actions.config_changed |= ImGui::SliderFloat("Chat Y", &config.chat.placement.y, 0.0f,
+                                                         2160.0f, "%.0f px");
+            if (ImGui::Checkbox("Channel messages", &config.chat.show_channel_messages)) {
+                actions.config_changed = true;
+                actions.subscription_changed = true;
+            }
+            if (ImGui::Checkbox("Server messages", &config.chat.show_server_messages)) {
+                actions.config_changed = true;
+                actions.subscription_changed = true;
+            }
+            if (ImGui::Checkbox("Private messages", &config.chat.show_private_messages)) {
+                actions.config_changed = true;
+                actions.subscription_changed = true;
+            }
+            help("Off by default and enforced in the plugin: while this is off, private "
+                 "messages are never sent to the overlay at all.");
+            actions.config_changed |=
+                ImGui::SliderInt("Lines", &config.chat.max_visible_messages, 1, 20);
+        } else {
+            ImGui::TextDisabled("While this is off, the plugin is not asked for messages at all.");
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Colours")) {
+        actions.config_changed |= colour_edit("Names", a.text_default);
+        actions.config_changed |= colour_edit("Channel header", title.text);
+        actions.config_changed |= colour_edit("Talking", config.indicators.speaking.icon_color);
+        actions.config_changed |= colour_edit("Muted", config.indicators.mic_muted.icon_color);
+        actions.config_changed |= colour_edit("You", ul.local_user_color);
+        actions.config_changed |=
+            colour_edit("Channel Commander", config.indicators.commander.icon_color);
+        ImGui::SeparatorText("Friends");
+        actions.config_changed |= ImGui::Checkbox("Colour friends differently", &ul.color_friends);
+        if (ul.color_friends) actions.config_changed |= colour_edit("Friend", ul.friend_color);
+        actions.config_changed |= ImGui::Checkbox("Show their [nickname]", &ul.show_friend_tag);
+        if (ul.show_friend_tag) {
+            actions.config_changed |= colour_edit("Nickname", ul.friend_tag_color);
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Profiles")) {
+        tab_profiles(config, profiles, actions);
+    }
+
+    if (ImGui::CollapsingHeader("Diagnostics")) {
+        tab_diagnostics(diagnostics, frame, stats, config_diagnostics, config, actions);
+    }
+}
+
 SettingsActions SettingsUi::draw(Config& config, const LinkDiagnostics& diagnostics,
                                  const OverlayFrame& frame, ProfileStore& profiles,
                                  const FrameStats& stats,
                                  const ConfigDiagnostics& config_diagnostics) {
     SettingsActions actions;
     const bool advanced = config.general.advanced_settings;
+
+    ImGui::TextColored(ImVec4(0.35f, 0.65f, 1.0f, 1.0f), "Paz' TeamSpeak Overlay v1.0");
+    ImGui::SameLine();
+    ImGui::TextDisabled("(build %s)", TSRO_VERSION);
+    if (ImGui::Checkbox("All settings", &config.general.advanced_settings)) {
+        actions.config_changed = true;
+    }
+    help("The basic view is one list of the settings people actually change. Turn this on for "
+         "every colour, animation and timing the overlay has.");
+    ImGui::SameLine();
+    if (ImGui::Button("Save")) actions.save_requested = true;
+    ImGui::SameLine();
+    if (ImGui::Button("Reload")) actions.reload_requested = true;
+    if (!status_.empty()) {
+        ImGui::SameLine();
+        ImGui::TextColored(status_is_error_ ? ImVec4(1.0f, 0.45f, 0.4f, 1.0f)
+                                            : ImVec4(0.45f, 0.85f, 0.5f, 1.0f),
+                           "%s", status_.c_str());
+    }
+    ImGui::Separator();
+
+    if (!advanced) {
+        basic_view(config, diagnostics, frame, profiles, stats, config_diagnostics, actions);
+        return actions;
+    }
 
     if (ImGui::BeginTabBar("tsro_tabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
         if (ImGui::BeginTabItem("General")) {
@@ -1222,7 +1591,7 @@ SettingsActions SettingsUi::draw(Config& config, const LinkDiagnostics& diagnost
             tab_users(config, frame, actions);
             ImGui::EndTabItem();
         }
-        if (advanced && ImGui::BeginTabItem("Channels")) {
+        if (ImGui::BeginTabItem("Channels")) {
             tab_channels(config, frame, actions);
             ImGui::EndTabItem();
         }
@@ -1238,11 +1607,11 @@ SettingsActions SettingsUi::draw(Config& config, const LinkDiagnostics& diagnost
             tab_chat(config, actions);
             ImGui::EndTabItem();
         }
-        if (advanced && ImGui::BeginTabItem("Animation")) {
+        if (ImGui::BeginTabItem("Animation")) {
             tab_animation(config, actions);
             ImGui::EndTabItem();
         }
-        if (advanced && ImGui::BeginTabItem("Integration")) {
+        if (ImGui::BeginTabItem("Integration")) {
             tab_integration(config, actions);
             ImGui::EndTabItem();
         }

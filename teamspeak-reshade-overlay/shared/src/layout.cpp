@@ -334,6 +334,9 @@ std::vector<const UserState*> order_users(const OverlayState& state, const Confi
     out.reserve(state.users.size());
     for (const auto& u : state.users) {
         if (u.is_self && !cfg.user_list.show_local_user) continue;
+        // Stealth: the roster collapses to whoever is actually speaking. Your own row stays so
+        // the overlay does not vanish entirely while you are the only one talking.
+        if (cfg.user_list.only_show_talking && !u.talking && !u.is_self) continue;
         if (!cfg.user_list.show_muted_users && !u.is_self &&
             (u.input_muted.value_or(false) || u.output_muted.value_or(false)))
             continue;

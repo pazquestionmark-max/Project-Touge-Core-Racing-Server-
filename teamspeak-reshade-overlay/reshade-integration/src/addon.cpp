@@ -17,6 +17,7 @@
 // Nothing here blocks: the IPC connection lives on OverlayClient's own thread and the render
 // callback only reads a triple-buffered frame.
 #include <atomic>
+#include <filesystem>
 #include <cstdint>
 #include <chrono>
 #include <memory>
@@ -28,6 +29,7 @@
 // declares, routing them through ReShade's function table.
 #include <reshade.hpp>
 
+#include "font_engine.hpp"
 #include "renderer.hpp"
 #include "settings_ui.hpp"
 #include "tsro/log.hpp"
@@ -51,6 +53,11 @@ struct AddonState {
     std::unique_ptr<tsro::OverlayClient> client;
     tsro::overlay::Renderer renderer;
     tsro::overlay::SettingsUi settings;
+    /// The overlay's own typeface. Independent of ReShade's font, which stays as the user set
+    /// it for ReShade's own UI.
+    tsro::overlay::FontEngine fonts;
+    std::string applied_font_file;
+    int applied_font_face = -1;
 
     /// Guards `config` only. The render callback reads it and the settings callback writes it;
     /// both run on the same thread inside ReShade's ImGui frame, so this is uncontended in
@@ -68,6 +75,31 @@ struct AddonState {
 };
 
 AddonState* g_state = nullptr;
+HMODULE g_module = nullptr;
+
+/// The folder the add-on DLL was loaded from, which is where its shipped `fonts` folder sits.
+std::string module_directory() {
+    if (g_module == nullptr) return {};
+    char path[MAX_PATH] = {};
+    const DWORD n = GetModuleFileNameA(g_module, path, static_cast<DWORD>(sizeof(path)));
+    if (n == 0 || n >= sizeof(path)) return {};
+    std::string s(path, n);
+    const std::size_t cut = s.find_last_of("\\/");
+    return cut == std::string::npos ? std::string{} : s.substr(0, cut);
+}
+
+/// Loads the configured typeface if it is not already loaded. Cheap to call every frame.
+void apply_font(AddonState& state) {
+    const tsro::AppearanceConfig& a = state.config.appearance;
+    if (a.font_file == state.applied_font_file && a.font_face_index == state.applied_font_face) {
+        return;
+    }
+    state.applied_font_file = a.font_file;
+    state.applied_font_face = a.font_face_index;
+    if (!state.fonts.select(a.font_file, a.font_face_index)) {
+        TSRO_WARN(kComponent, "font: " + state.fonts.error());
+    }
+}
 
 std::int64_t now_ms() {
     using namespace std::chrono;
@@ -169,6 +201,11 @@ void on_reshade_overlay(reshade::api::effect_runtime* runtime) {
     const tsro::OverlayFrame& frame = state->client->latest();
 
     std::lock_guard<std::mutex> lock(state->config_mutex);
+
+    // Font upkeep happens here, before anything is drawn: begin_frame bakes at most one atlas,
+    // so switching typeface or size costs a single frame rather than a stall mid-draw-list.
+    apply_font(*state);
+    state->fonts.begin_frame(runtime->get_device());
     const std::vector<tsro::OverlayEvent> events = state->client->drain_events();
     state->renderer.submit_events(events, state->config, now);
 
@@ -261,6 +298,7 @@ void on_settings_overlay(reshade::api::effect_runtime* runtime) {
 }
 
 bool initialise(HMODULE module) {
+    g_module = module;
     // register_addon also resolves ReShade's ImGui function table, and fails if this add-on was
     // built against an ImGui version ReShade does not export. Failing here rather than drawing
     // through a null table is what turns a version mismatch into "the add-on did not load"
@@ -269,6 +307,18 @@ bool initialise(HMODULE module) {
 
     g_state = new AddonState();
     load_configuration(*g_state);
+    // The user's own folder first, then the one shipped beside the add-on, so a font dropped in
+    // the config directory wins over one of the same name that came with the release. The
+    // config folder is created here so there is somewhere obvious to drop a .ttf even before
+    // one has been added -- the settings window prints both paths.
+    {
+        const std::string user_fonts = g_state->profiles->root() + "/fonts";
+        std::error_code ec;
+        std::filesystem::create_directories(user_fonts, ec);
+        g_state->fonts.set_directories({user_fonts, module_directory() + "/fonts"});
+    }
+    g_state->renderer.set_font_engine(&g_state->fonts);
+    g_state->settings.set_font_engine(&g_state->fonts);
     start_client(*g_state);
     g_state->settings.refresh_profiles(*g_state->profiles);
     g_state->started.store(true, std::memory_order_release);
@@ -286,6 +336,9 @@ void shutdown(HMODULE module) {
         reshade::unregister_overlay("TeamSpeak Overlay", &on_settings_overlay);
         // Stop the IPC thread before the state it references is destroyed.
         if (g_state->client) g_state->client->stop();
+        g_state->renderer.set_font_engine(nullptr);
+        g_state->settings.set_font_engine(nullptr);
+        g_state->fonts.release();
         delete g_state;
         g_state = nullptr;
     }

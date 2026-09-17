@@ -49,6 +49,9 @@ float estimate_text_width(std::string_view text, float font_size) {
     return static_cast<float>(glyphs) * font_size * 0.52f;
 }
 
+/// The overlay's own typeface, when one is loaded. Owned by the add-on, not by the renderer.
+FontEngine* g_fonts = nullptr;
+
 /// Which measurement route last answered. Purely diagnostic -- the debug panel shows it so a
 /// measurement problem is visible in the overlay instead of having to be inferred from a
 /// screenshot of misplaced text.
@@ -68,6 +71,17 @@ TextMetricsSource g_metrics_source = TextMetricsSource::Unknown;
 /// table entries that can answer, and estimates if neither does.
 float measure_text(std::string_view text, float font_size) {
     if (text.empty() || font_size <= 0.0f) return 0.0f;
+
+    // The overlay's own font answers from the very advance table its glyphs are drawn from, so
+    // when it is live there is no way for alignment and rendering to disagree.
+    if (g_fonts != nullptr) {
+        const float own = g_fonts->measure(text, font_size);
+        if (own > 0.0f) {
+            g_metrics_source = TextMetricsSource::OwnFont;
+            return own;
+        }
+    }
+
     const char* const begin = text.data();
     const char* const end = begin + text.size();
 
@@ -174,10 +188,13 @@ UserState preview_user(const char* uid, const char* name) {
 
 }  // namespace
 
+void Renderer::set_font_engine(FontEngine* fonts) noexcept { g_fonts = fonts; }
+
 TextMetricsSource text_metrics_source() noexcept { return g_metrics_source; }
 
 const char* text_metrics_source_name(TextMetricsSource source) noexcept {
     switch (source) {
+        case TextMetricsSource::OwnFont: return "the overlay's own font";
         case TextMetricsSource::CalcTextSize: return "ImGui::CalcTextSize";
         case TextMetricsSource::CalcTextSizeA: return "ImFont::CalcTextSizeA";
         case TextMetricsSource::Estimated: return "estimated (ImGui returned no width)";
@@ -326,10 +343,21 @@ void Renderer::submit_events(const std::vector<OverlayEvent>& events, const Conf
 void Renderer::draw_text(ImDrawList* dl, const Config& config, float x, float y, float size,
                          std::uint32_t color, std::string_view text) {
     if (text.empty()) return;
-    ImFont* font = overlay_font();
-    if (font == nullptr) return;
+
+    // One emitter for both paths, so the outline and shadow below are written once rather than
+    // duplicated per font source.
+    const bool own = g_fonts != nullptr && g_fonts->ready_at(size);
+    ImFont* font = own ? nullptr : overlay_font();
+    if (!own && font == nullptr) return;
     const char* begin = text.data();
     const char* end = text.data() + text.size();
+    const auto emit = [&](float ex, float ey, std::uint32_t ecolor) {
+        if (own) {
+            g_fonts->draw(dl, ex, ey, size, ecolor, text);
+        } else {
+            dl->AddText(font, size, ImVec2(ex, ey), ecolor, begin, end);
+        }
+    };
 
     // An outline is eight extra draws, so it is opt-in -- but unlike a one-sided shadow it stays
     // readable over *any* background rather than most of them.
@@ -339,16 +367,15 @@ void Renderer::draw_text(ImDrawList* dl, const Config& config, float x, float y,
         static constexpr float kOffsets[8][2] = {{-1, -1}, {0, -1}, {1, -1}, {-1, 0},
                                                  {1, 0},   {-1, 1}, {0, 1},  {1, 1}};
         for (const auto& o : kOffsets) {
-            dl->AddText(font, size, ImVec2(x + o[0] * t, y + o[1] * t), outline, begin, end);
+            emit(x + o[0] * t, y + o[1] * t, outline);
         }
     } else if (config.appearance.text_shadow) {
         // A one-pixel drop shadow is what keeps light text readable over bright game content,
         // which is the difference between usable and not on a snow map or a white car.
         const float offset = config.appearance.text_shadow_offset;
-        dl->AddText(font, size, ImVec2(x + offset, y + offset),
-                    config.appearance.text_shadow_color.to_abgr(), begin, end);
+        emit(x + offset, y + offset, config.appearance.text_shadow_color.to_abgr());
     }
-    dl->AddText(font, size, ImVec2(x, y), color, begin, end);
+    emit(x, y, color);
 }
 
 void Renderer::draw_title(ImDrawList* dl, const Config& config, const LayoutResult& layout,
@@ -518,24 +545,56 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
     const NotificationsConfig& nc = config.notifications;
     if (!nc.placement.visible || notifications_.items().empty()) return;
 
+    const NotificationBoxStyle& box = nc.box;
     const float scale = config.general.scale;
-    const float width = nc.width * scale;
-    const float font = config.appearance.font_size * scale;
+    const float font = config.appearance.font_size * scale * nc.font_scale;
     // Notifications carry their own padding. appearance.padding_* belongs to the user list,
     // which legitimately runs at zero, and borrowing it put toast text hard against its border.
-    const float pad_x = nc.padding_x * scale;
+    const float pad_x = std::max(2.0f, nc.padding_x * scale);
     const float pad_y = nc.padding_y * scale;
     const float icon = config.appearance.icon_size * scale;
     const float gap = std::max(4.0f, config.user_list.indicator_gap * scale);
+    const float bar_w = box.accent_bar ? box.accent_bar_width * scale : 0.0f;
     const float height = std::max(nc.min_height * scale, font + pad_y * 2.0f);
     const float spacing = nc.spacing * scale;
+    const float ceiling = std::max(80.0f, std::min(box.max_width * scale, viewport.width - 16.0f));
+
+    const MeasureFn measure = [](std::string_view t, float size) { return measure_text(t, size); };
 
     const std::size_t count = notifications_.items().size();
     const float stack_height =
         static_cast<float>(count) * height + static_cast<float>(count - 1) * spacing;
-    const Rect area = resolve_placement(nc.placement, width, stack_height, viewport);
+    // Placement is resolved once against the widest a toast may get. Every anchor puts its own
+    // edge at a position that does not depend on the box width -- a right anchor pins the right
+    // edge, a centred one the centre -- so this frame of reference stays correct even though
+    // each toast below is a different width.
+    const Rect area = resolve_placement(nc.placement, ceiling, stack_height, viewport);
 
-    const MeasureFn measure = [](std::string_view t, float size) { return measure_text(t, size); };
+    /// Width of one toast's content, and the pieces it is made of.
+    struct Content {
+        float icon_w = 0.0f;
+        float prefix_w = 0.0f;
+        float body_w = 0.0f;
+        float badge_w = 0.0f;
+        float box_w = 0.0f;
+    };
+
+    const auto measure_content = [&](const Notification& n, std::string_view badge) {
+        Content c;
+        c.icon_w = n.icon != IconShape::None ? icon + gap : 0.0f;
+        c.prefix_w = n.prefix.empty() ? 0.0f : measure_text(n.prefix, font) + gap;
+        c.badge_w = badge.empty() ? 0.0f : measure_text(badge, font) + gap;
+        const float chrome = bar_w + pad_x * 2.0f + c.icon_w + c.prefix_w + c.badge_w;
+        const float wanted = measure_text(n.text, font);
+        if (box.auto_width) {
+            c.body_w = std::min(wanted, std::max(16.0f, ceiling - chrome));
+            c.box_w = std::min(ceiling, std::max(nc.min_height * scale, chrome + c.body_w));
+        } else {
+            c.box_w = std::min(ceiling, nc.width * scale);
+            c.body_w = std::min(wanted, std::max(16.0f, c.box_w - chrome));
+        }
+        return c;
+    };
 
     std::size_t index = 0;
     for (const Notification& notification : notifications_.items()) {
@@ -550,49 +609,61 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
             nc.stack == StackDirection::Down ? index : (count - 1 - index));
         const float y = area.y + offset * (height + spacing);
 
-        draw_panel(dl, area.x, y, width, height, config.appearance.corner_radius,
-                   notification.show_background ? packed(notification.background, alpha) : 0u,
-                   notification.show_border ? packed(notification.border, alpha) : 0u,
-                   config.appearance.panel_border_thickness);
+        text_scratch_.clear();
+        if (notification.repeat_count > 1) {
+            text_scratch_ = "x" + std::to_string(notification.repeat_count);
+        }
+        const Content content = measure_content(notification, text_scratch_);
+
+        // Each toast is aligned inside the stack's frame rather than filling it.
+        float box_x = area.x;
+        if (nc.placement.align == Align::Right) {
+            box_x = area.right() - content.box_w;
+        } else if (nc.placement.align == Align::Center) {
+            box_x = area.x + (area.w - content.box_w) * 0.5f;
+        }
+
+        // The edge. Accent takes the category's own colour so each kind of event is
+        // recognisable at a glance without reading it; Custom is one colour for the lot.
+        std::uint32_t edge = 0u;
+        if (box.border == NotificationBorder::Accent) {
+            edge = packed(notification.icon_color, alpha * box.border_accent_opacity);
+        } else if (box.border == NotificationBorder::Custom) {
+            edge = packed(box.border_color, alpha);
+        }
+        draw_panel(dl, box_x, y, content.box_w, height, box.corner_radius,
+                   notification.show_background ? packed(box.background, alpha) : 0u, edge,
+                   box.border_thickness * scale);
+
+        // The stripe down the leading edge, in the category colour. Drawn inside the rounded
+        // rectangle so it follows the corner rather than poking out of it.
+        if (bar_w > 0.0f) {
+            const float inset = std::min(box.corner_radius * 0.5f, height * 0.25f);
+            dl->AddRectFilled(ImVec2(box_x + box.border_thickness * scale, y + inset),
+                              ImVec2(box_x + box.border_thickness * scale + bar_w, y + height - inset),
+                              packed(notification.icon_color, alpha), 0.0f);
+        }
 
         const float centre_y = y + height * 0.5f;
         const float text_top = centre_y - font * 0.5f;
 
-        // Measure the whole line first, then place it. Deriving the message's budget from the
-        // panel rather than from wherever the cursor happened to land is what makes this safe:
-        // a bad prefix measurement can now only shift the text, never starve it of room. The
-        // previous version skipped the body outright when the budget came out at zero, which is
-        // why notification boxes drew completely empty.
-        const float avail = std::max(16.0f, width - pad_x * 2.0f);
-        const float icon_w = notification.icon != IconShape::None ? icon + gap : 0.0f;
-        const float prefix_w =
-            notification.prefix.empty() ? 0.0f : measure_text(notification.prefix, font) + gap;
-        const float body_budget = std::max(16.0f, avail - icon_w - prefix_w);
-        const float body_w = std::min(measure_text(notification.text, font), body_budget);
-        const float content = std::min(avail, icon_w + prefix_w + body_w);
-
-        float x = area.x + pad_x;
-        if (nc.placement.align == Align::Right) {
-            x = area.x + width - pad_x - content;
-        } else if (nc.placement.align == Align::Center) {
-            x = area.x + (width - content) * 0.5f;
-        }
-        x = std::max(x, area.x + pad_x);
+        // Content always starts after the stripe and padding, and its budget comes from the box
+        // rather than from wherever the cursor landed -- a bad measurement can shift text but
+        // can never starve it of room, which is what used to leave these boxes empty.
+        float x = box_x + bar_w + pad_x;
 
         if (notification.icon != IconShape::None) {
             draw_icon(dl, notification.icon, x + icon * 0.5f, centre_y, icon,
                       packed(notification.icon_color, alpha), 1.5f * scale);
-            x += icon_w;
+            x += content.icon_w;
         }
         if (!notification.prefix.empty()) {
             draw_text(dl, config, x, text_top, font, packed(notification.icon_color, alpha),
                       notification.prefix);
-            x += prefix_w;
+            x += content.prefix_w;
         }
 
-        // The message is fitted to the budget reserved for it above, so it can never run past
-        // the panel and can never be dropped.
-        float remaining = body_budget;
+        float remaining = std::max(16.0f, content.body_w);
 
         // The sender's name is drawn in its own colour, the rest of the line in the body colour.
         const std::size_t name_pos =
@@ -620,15 +691,17 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
                          packed(notification.text_color, alpha));
         }
 
-        if (notification.repeat_count > 1) {
-            text_scratch_ = "x" + std::to_string(notification.repeat_count);
+        if (!text_scratch_.empty()) {
+            // The repeat count has its own reserved width, so it sits beside the message
+            // instead of on top of it.
             const float w = measure_text(text_scratch_, font);
-            draw_text(dl, config, area.x + width - pad_x - w, text_top, font,
+            draw_text(dl, config, box_x + content.box_w - pad_x - w, text_top, font,
                       packed(config.appearance.text_secondary, alpha), text_scratch_);
         }
         ++index;
     }
 }
+
 
 void Renderer::draw_chat(ImDrawList* dl, const Config& config, const Viewport& viewport,
                          const std::vector<ChatMessage>& messages, float opacity,
