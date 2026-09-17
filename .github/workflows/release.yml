@@ -104,9 +104,16 @@ jobs:
         shell: bash
         run: |
           if [ -n "${{ inputs.tag }}" ]; then
-            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            NAME="${{ inputs.tag }}"
           else
-            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            NAME="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          # Semver pre-release: anything with a hyphen (v1.0.0-rc1).
+          if [[ "$NAME" == *-* ]]; then
+            echo "prerelease=--prerelease" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Write the release notes
@@ -171,5 +178,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "TeamSpeak ReShade Overlay ${{ steps.tag.outputs.name }}" \
             --notes-file NOTES.md \
-            ${{ (github.event_name == 'workflow_dispatch' && inputs.prerelease) && '--prerelease' || '' }} \
+            ${{ steps.tag.outputs.prerelease }} \
             artifacts/*.zip
