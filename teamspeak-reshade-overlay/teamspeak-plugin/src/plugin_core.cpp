@@ -107,7 +107,8 @@ void PluginCore::refresh_contacts(bool force) {
 
     std::vector<Contact> contacts;
     std::string error;
-    if (!read_contacts(config_dir_, contacts, error)) {
+    ContactReadReport report;
+    if (!read_contacts(config_dir_, contacts, error, &report)) {
         if (error != contacts_error_) {
             contacts_error_ = error;
             TSRO_WARN(kComponent, "contact list unavailable: " + error);
@@ -115,9 +116,9 @@ void PluginCore::refresh_contacts(bool force) {
         return;
     }
     contacts_error_.clear();
-    const std::size_t total = contacts.size();
+    contacts_report_ = report.summary();
     state_.set_contacts(std::move(contacts));
-    TSRO_INFO(kComponent, "contacts: " + std::to_string(total) + " read, " +
+    TSRO_INFO(kComponent, "contacts: " + contacts_report_ + ", " +
                               std::to_string(state_.friend_count()) + " friends");
 }
 
@@ -472,6 +473,7 @@ std::vector<std::string> PluginCore::diagnostics() const {
     lines.push_back("Contacts: " + std::to_string(state_.contact_count()) + " (" +
                     std::to_string(state_.friend_count()) + " friends)" +
                     (contacts_error_.empty() ? std::string() : " -- " + contacts_error_));
+    if (!contacts_report_.empty()) lines.push_back("Contact source: " + contacts_report_);
     lines.push_back("Events sent: " + std::to_string(events_emitted_));
     lines.push_back("Last event: " + (last_event_.empty() ? std::string("(none)") : last_event_));
     if (ipc_) {

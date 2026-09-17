@@ -2,9 +2,34 @@
 #include "tsro/ts_contacts.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <cstring>
 
 namespace tsro {
 namespace {
+
+bool same_key(std::string_view a, const char* b) {
+    const std::size_t n = std::strlen(b);
+    if (a.size() != n) return false;
+    for (std::size_t i = 0; i < n; ++i) {
+        if (std::tolower(static_cast<unsigned char>(a[i])) !=
+            std::tolower(static_cast<unsigned char>(b[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/// The key a contact's identity is stored under.
+///
+/// Several spellings are accepted because the one this started with -- IDENTITY, upper case --
+/// was a guess, and a wrong guess here produces no contacts at all rather than an error anyone
+/// would notice.
+bool is_identity_key(std::string_view key) {
+    return same_key(key, "IDENTITY") || same_key(key, "UID") ||
+           same_key(key, "UniqueIdentifier") || same_key(key, "Unique_Identifier") ||
+           same_key(key, "ClientUniqueIdentifier");
+}
 
 /// Splits "Key=Value" out of one line, tolerating CR line endings and surrounding blanks.
 bool split_setting(std::string_view line, std::string_view& key, std::string_view& value) {
@@ -39,7 +64,9 @@ std::vector<Contact> parse_contacts(const std::vector<sqlite::Row>& rows) {
 
     for (const sqlite::Row& row : rows) {
         for (const std::string& column : row) {
-            if (column.find("IDENTITY=") == std::string::npos) continue;
+            // No pre-filter on the column's contents: the blob is recognised by parsing it and
+            // finding an identity, not by matching a spelling that was only ever assumed.
+            if (column.find('=') == std::string::npos) continue;
 
             Contact contact;
             bool has_flag = false;
@@ -53,11 +80,11 @@ std::vector<Contact> parse_contacts(const std::vector<sqlite::Row>& rows) {
                 std::string_view key;
                 std::string_view value;
                 if (!split_setting(line, key, value)) continue;
-                if (key == "IDENTITY") {
+                if (is_identity_key(key)) {
                     contact.unique_id.assign(value);
-                } else if (key == "Nickname") {
+                } else if (same_key(key, "Nickname")) {
                     contact.nickname.assign(value);
-                } else if (key == "Friend") {
+                } else if (same_key(key, "Friend")) {
                     contact.kind = kind_from(value);
                     contact.raw_flag = 0;
                     for (const char c : value) {
@@ -72,7 +99,8 @@ std::vector<Contact> parse_contacts(const std::vector<sqlite::Row>& rows) {
                 }
             }
             (void)has_flag;
-            if (!contact.unique_id.empty()) out.push_back(std::move(contact));
+            if (contact.unique_id.empty()) continue;   // not the column carrying the contact
+            out.push_back(std::move(contact));
             break;   // one identity per row
         }
     }
@@ -88,9 +116,22 @@ std::vector<Contact> parse_contacts(const std::vector<sqlite::Row>& rows) {
     return out;
 }
 
-bool read_contacts(const std::string& config_dir, std::vector<Contact>& out, std::string& error) {
+std::string ContactReadReport::summary() const {
+    std::string s = std::to_string(parsed) + " contacts";
+    if (!table.empty()) s += " from table '" + table + "'";
+    s += " (" + std::to_string(rows) + " rows, " + std::to_string(tables) + " tables in " + path +
+         ")";
+    return s;
+}
+
+bool read_contacts(const std::string& config_dir, std::vector<Contact>& out, std::string& error,
+                   ContactReadReport* report) {
     out.clear();
     error.clear();
+    ContactReadReport local;
+    ContactReadReport& r = report != nullptr ? *report : local;
+    r = ContactReadReport{};
+
     if (config_dir.empty()) {
         error = "TeamSpeak did not report a configuration folder";
         return false;
@@ -98,11 +139,43 @@ bool read_contacts(const std::string& config_dir, std::vector<Contact>& out, std
     std::string path = config_dir;
     if (path.back() != '/' && path.back() != '\\') path += '/';
     path += "settings.db";
+    r.path = path;
 
-    std::vector<sqlite::Row> rows;
-    if (!sqlite::read_table(path, "Contacts", rows, error)) return false;
-    out = parse_contacts(rows);
-    return true;
+    std::vector<std::string> tables;
+    std::string list_error;
+    sqlite::list_tables(path, tables, list_error);
+    r.tables = tables.size();
+
+    // The expected name first, then everything else. Searching costs one pass over a settings
+    // file; assuming the name and being wrong costs the entire feature, silently.
+    std::vector<std::string> order;
+    order.push_back("Contacts");
+    for (const std::string& name : tables) {
+        if (name != "Contacts") order.push_back(name);
+    }
+
+    for (const std::string& name : order) {
+        std::vector<sqlite::Row> rows;
+        std::string read_error;
+        if (!sqlite::read_table(path, name, rows, read_error)) {
+            if (error.empty()) error = read_error;
+            continue;
+        }
+        if (rows.empty()) continue;
+        std::vector<Contact> parsed = parse_contacts(rows);
+        if (parsed.empty()) continue;
+        r.table = name;
+        r.rows = rows.size();
+        r.parsed = parsed.size();
+        out = std::move(parsed);
+        error.clear();
+        return true;
+    }
+
+    // Nothing found is not a failure -- somebody with no contacts is an ordinary case -- but the
+    // report says where we looked, which is what tells the two apart.
+    if (!list_error.empty() && error.empty()) error = list_error;
+    return error.empty();
 }
 
 }  // namespace tsro

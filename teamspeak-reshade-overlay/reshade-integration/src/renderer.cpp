@@ -617,8 +617,10 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
             for (const std::string& line : t.lines) {
                 t.body_w = std::max(t.body_w, measure_text(line, font));
             }
+            t.fits = true;   // each line was wrapped to the budget, so none of them overflows
         } else {
             // Not wrapping: take the width the text needs, up to the cap, and only then clip.
+            t.fits = wanted <= room;
             t.body_w = std::min(wanted, room);
             t.lines.assign(1, notification.text);
         }
@@ -700,7 +702,18 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
             float remaining = std::max(16.0f, t.body_w);
 
             const auto draw_segment = [&](std::string_view segment, std::uint32_t colour) {
-                if (segment.empty() || remaining <= 4.0f) return;
+                if (segment.empty()) return;
+                // The line is split into segments only to colour the name differently, and the
+                // box was already measured to hold the whole thing. Re-fitting each piece
+                // against what is left would ellipsise on a pixel of rounding -- which is
+                // exactly what turned "left D4V4" into "left D4...". Only a line that genuinely
+                // did not fit is allowed to lose anything.
+                if (t.fits) {
+                    draw_text(dl, config, x, line_top, font, colour, segment);
+                    x += measure_text(segment, font);
+                    return;
+                }
+                if (remaining <= 4.0f) return;
                 const FittedText fitted =
                     fit_text(segment, remaining, font, OverflowMode::Ellipsis, 0.75f, measure);
                 draw_text(dl, config, x, line_top, font, colour, fitted.text);

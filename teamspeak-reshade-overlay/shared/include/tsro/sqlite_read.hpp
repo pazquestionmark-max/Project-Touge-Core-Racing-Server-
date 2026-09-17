@@ -23,12 +23,16 @@ namespace tsro::sqlite {
 /// keeps the decoder free of a variant type.
 using Row = std::vector<std::string>;
 
-/// Reads every row of `table`.
+/// Reads every row of `table`. The name is matched without regard to case, as SQL itself does.
 ///
 /// Returns false with `error` set when the file is missing, is not a SQLite database, or uses a
 /// feature this reader does not implement. A missing table is not an error: it yields no rows.
 bool read_table(const std::string& path, const std::string& table, std::vector<Row>& out,
                 std::string& error);
+
+/// Names every table in the database. Used to find the contact list when it is not where it was
+/// expected, and to say what *was* there when it cannot be found at all.
+bool list_tables(const std::string& path, std::vector<std::string>& out, std::string& error);
 
 /// Same, over a database image already in memory. `wal` may be empty. Exposed for tests.
 bool read_table_from_memory(const std::vector<unsigned char>& db,

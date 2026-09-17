@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -15,6 +16,18 @@ namespace {
 constexpr char kMagic[] = "SQLite format 3";
 constexpr std::size_t kHeaderSize = 100;
 constexpr std::size_t kMaxFileBytes = 256u * 1024u * 1024u;
+
+/// SQL compares identifiers without regard to case, so a table written as "contacts" must still
+/// be found when asked for as "Contacts". Assuming otherwise is how this came back empty.
+bool same_name(const std::string& a, const std::string& b) {
+    if (a.size() != b.size()) return false;
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        const unsigned char l = static_cast<unsigned char>(a[i]);
+        const unsigned char r = static_cast<unsigned char>(b[i]);
+        if (std::tolower(l) != std::tolower(r)) return false;
+    }
+    return true;
+}
 
 std::uint16_t be16(const unsigned char* p) {
     return static_cast<std::uint16_t>((static_cast<std::uint32_t>(p[0]) << 8) | p[1]);
@@ -325,7 +338,7 @@ bool read_table_from_memory(const std::vector<unsigned char>& db,
     std::uint32_t root = 0;
     for (const Row& row : schema) {
         if (row.size() < 4) continue;
-        if (row[0] != "table" || row[1] != table) continue;
+        if (row[0] != "table" || !same_name(row[1], table)) continue;
         root = static_cast<std::uint32_t>(std::strtoul(row[3].c_str(), nullptr, 10));
         break;
     }
@@ -335,6 +348,31 @@ bool read_table_from_memory(const std::vector<unsigned char>& db,
     if (!walk_table(pager, root, out, table_visited, 0)) {
         error = "table '" + table + "' could not be read";
         return false;
+    }
+    return true;
+}
+
+bool list_tables(const std::string& path, std::vector<std::string>& out, std::string& error) {
+    out.clear();
+    error.clear();
+    std::vector<unsigned char> db;
+    if (!read_file(path, db)) {
+        error = "cannot read '" + path + "'";
+        return false;
+    }
+    std::vector<unsigned char> wal;
+    read_file(path + "-wal", wal);
+
+    Pager pager;
+    if (!pager.init(&db, &wal, error)) return false;
+    std::vector<Row> schema;
+    std::set<std::uint32_t> visited;
+    if (!walk_table(pager, 1, schema, visited, 0)) {
+        error = "the schema table could not be read";
+        return false;
+    }
+    for (const Row& row : schema) {
+        if (row.size() >= 2 && row[0] == "table") out.push_back(row[1]);
     }
     return true;
 }

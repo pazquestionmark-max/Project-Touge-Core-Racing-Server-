@@ -108,6 +108,8 @@ private:
         float body_w = 0.0f;
         float box_w = 0.0f;
         float box_h = 0.0f;
+        /// True when the text was measured to fit the box, so nothing may be ellipsised.
+        bool fits = true;
         std::string badge;
         std::vector<std::string> lines;
     };

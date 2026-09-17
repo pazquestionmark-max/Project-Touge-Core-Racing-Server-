@@ -103,6 +103,7 @@ private:
     std::string config_dir_;
     std::int64_t contacts_read_ms_ = 0;
     std::string contacts_error_;
+    std::string contacts_report_;
     std::uint64_t next_chat_id_ = 1;
     std::uint64_t events_emitted_ = 0;
     std::string last_event_;
