@@ -328,7 +328,18 @@ StoreAction StateStore::apply(const proto::Envelope& env, std::vector<OverlayEve
                 return pending;
             }
             UserState* u = mutable_user(p.client_id, p.unique_id);
-            if (u == nullptr) return pending;
+            if (u == nullptr) {
+                // Whispering across channels is the point of whispering, so the whisperer is
+                // usually *not* in our roster. Announce it anyway, from what the payload
+                // carries -- they still do not join the user list, because they are not here.
+                if (!p.active || p.display_name.empty()) return pending;
+                OverlayEvent e = make_event(OverlayEventKind::WhisperStarted, env.ts);
+                e.unique_id = p.unique_id;
+                e.display_name = p.display_name;
+                e.from_channel = p.from_channel;
+                events.push_back(std::move(e));
+                return pending;
+            }
             const bool before = u->whispering_to_me;
             u->whispering_to_me = p.active;
             if (before != p.active) {
@@ -337,6 +348,7 @@ StoreAction StateStore::apply(const proto::Envelope& env, std::vector<OverlayEve
                     env.ts);
                 e.unique_id = u->unique_id;
                 e.display_name = u->display_name;
+                e.from_channel = p.from_channel;
                 events.push_back(std::move(e));
             }
             return pending;

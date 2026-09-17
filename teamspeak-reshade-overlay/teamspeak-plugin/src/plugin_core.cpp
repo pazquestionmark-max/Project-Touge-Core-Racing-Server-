@@ -311,7 +311,33 @@ void PluginCore::on_talk_status_changed(std::uint64_t server, TsTalkStatus statu
     const bool talking = status == TsTalkStatus::Talking;
 
     const UserState* before = state_.find(client);
-    if (before == nullptr) return;
+    if (before == nullptr) {
+        // Not in our channel -- which is the usual case for a whisper, since whispering across
+        // channels is the whole point of it. Bailing here dropped nearly every whisper there
+        // was. Read enough about them to announce it, without adding them to the roster: they
+        // are not in this channel and the list must not claim they are.
+        if (!received_whisper || !talking || !ipc_) return;
+        UserState whisperer;
+        if (!state_.read_user(server, client, whisperer)) return;
+
+        proto::WhisperChangedPayload whisper;
+        whisper.client_id = client;
+        whisper.unique_id = whisperer.unique_id;
+        whisper.display_name =
+            whisperer.display_name.empty() ? whisperer.nickname : whisperer.display_name;
+        whisper.active = true;
+        whisper.from_channel = true;   // set below from where they actually are
+        whisper.direction = "incoming";
+
+        std::uint64_t their_channel = 0;
+        whisper.from_channel = query_.channel_of_client(server, client, their_channel) &&
+                               their_channel == state_.channel_id();
+        ipc_->broadcast(proto::MessageType::WhisperChanged, proto::encode(whisper),
+                        state_.server_uid());
+        ++events_emitted_;
+        last_event_ = "whisper";
+        return;
+    }
     const std::string unique_id = before->unique_id;
     const bool whisper_before = before->whispering_to_me;
 
@@ -336,6 +362,8 @@ void PluginCore::on_talk_status_changed(std::uint64_t server, TsTalkStatus statu
         whisper.client_id = client;
         whisper.unique_id = unique_id;
         whisper.active = after->whispering_to_me;
+        whisper.display_name = after->display_name.empty() ? after->nickname : after->display_name;
+        whisper.from_channel = true;     // they are in our channel, or they would not be here
         whisper.direction = "incoming";  // the only direction Plugin API 26 reports
         ipc_->broadcast(proto::MessageType::WhisperChanged, proto::encode(whisper),
                         state_.server_uid());

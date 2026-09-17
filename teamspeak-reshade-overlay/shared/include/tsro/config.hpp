@@ -356,6 +356,14 @@ struct NotificationsConfig {
     NotificationStyle channel_switch{};
     NotificationStyle connection{};
     NotificationStyle whisper{};
+    /// Which whispers raise a toast.
+    ///
+    /// TeamSpeak tells the receiver only *that* a whisper arrived -- never which whisper list
+    /// the sender used -- so an individual, a group and a Channel Commander whisper are
+    /// indistinguishable here, and offering to filter them would be offering something that
+    /// cannot work. Where they whispered *from* is knowable, and is the one split worth having.
+    bool whisper_from_channel = true;
+    bool whisper_from_elsewhere = true;
     NotificationStyle chat{};
     /// Private messages get their own toast. A message sent to you personally is not the same
     /// event as one sent to the channel, and the thing you need from it first is who it is from.

@@ -159,6 +159,11 @@ struct WhisperChangedPayload {
     bool active = false;
     /// Always "incoming" in v1: no TeamSpeak plugin callback reports outgoing whisper state.
     std::string direction = "incoming";
+    std::string display_name;
+    /// Whether they were in your channel when they whispered. The plugin API tells the
+    /// receiver only *that* a whisper arrived -- never which whisper list was used -- so this
+    /// is the one distinction that can honestly be drawn between whispers.
+    bool from_channel = false;
 };
 
 struct HeartbeatPayload {

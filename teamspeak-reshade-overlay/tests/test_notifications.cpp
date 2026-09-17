@@ -513,3 +513,41 @@ TEST(notifications, placeholder_colouring_can_be_switched_off) {
     q.submit(join_event("Test", 1000), cfg, 1000);
     CHECK(q.items().front().highlights.empty());
 }
+
+TEST(notifications, a_whisper_from_outside_your_channel_is_announced) {
+    // The bug: whispering across channels is the point of whispering, so the whisperer is
+    // usually not in the roster -- and the handler gave up on exactly that case, dropping
+    // nearly every whisper there was.
+    Config cfg = Config::defaults();
+    NotificationQueue q;
+
+    OverlayEvent e;
+    e.kind = OverlayEventKind::WhisperStarted;
+    e.display_name = "Carol";
+    e.from_channel = false;
+    q.submit(e, cfg, 1000);
+
+    CHECK_EQ(q.items().size(), std::size_t{1});
+    CHECK(q.items().front().kind == NotificationKind::Whisper);
+    CHECK(q.items().front().text.find("Carol") != std::string::npos);
+}
+
+TEST(notifications, whispers_can_be_filtered_by_where_they_came_from) {
+    Config cfg = Config::defaults();
+    cfg.notifications.whisper_from_elsewhere = false;
+    NotificationQueue q;
+
+    OverlayEvent outside;
+    outside.kind = OverlayEventKind::WhisperStarted;
+    outside.display_name = "Carol";
+    outside.from_channel = false;
+    q.submit(outside, cfg, 1000);
+    CHECK(q.items().empty());
+
+    OverlayEvent inside;
+    inside.kind = OverlayEventKind::WhisperStarted;
+    inside.display_name = "Dave";
+    inside.from_channel = true;
+    q.submit(inside, cfg, 1000);
+    CHECK_EQ(q.items().size(), std::size_t{1});
+}
