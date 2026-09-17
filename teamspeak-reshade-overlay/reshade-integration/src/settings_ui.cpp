@@ -800,15 +800,14 @@ void SettingsUi::tab_notifications(Config& config, SettingsActions& actions) {
     actions.config_changed |= ImGui::SliderInt("Ignore joins for (ms) after connecting",
                                                &n.suppress_after_connect_ms, 0, 15000);
     ImGui::SeparatorText("Box");
-    actions.config_changed |= ImGui::SliderFloat("Width", &n.width, 120.0f, 900.0f, "%.0f px");
-    actions.config_changed |= ImGui::SliderFloat("Padding across", &n.padding_x, 0.0f, 40.0f, "%.0f px");
-    actions.config_changed |= ImGui::SliderFloat("Padding down", &n.padding_y, 0.0f, 40.0f, "%.0f px");
-    help("Notifications have their own padding: the user list is often set to zero, which would "
-         "otherwise put toast text hard against its own border.");
-    actions.config_changed |= ImGui::SliderFloat("Minimum height", &n.min_height, 12.0f, 120.0f, "%.0f px");
-    ImGui::TextDisabled("Message text is clipped to the box; it cannot overflow.");
-    help("Stops a burst of join notifications when you connect to a channel that already has "
-         "people in it.");
+    // The same controls the basic view has. They were missing here, which is why the only view
+    // that offers every other setting had no way to widen a toast.
+    section_notification_box(config, actions);
+    actions.config_changed |=
+        ImGui::SliderFloat("Minimum height", &n.min_height, 12.0f, 120.0f, "%.0f px");
+    ImGui::TextDisabled(
+        "An event line takes the width it needs and grows towards the anchored edge. Only a "
+        "chat or private message wraps, and each of those has its own switch below.");
 
     actions.config_changed |= notification_editor("Someone joins", n.join,
                                                   "Placeholders: {name} {channel} {count}");

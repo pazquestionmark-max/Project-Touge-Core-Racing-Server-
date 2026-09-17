@@ -243,7 +243,20 @@ void TsState::stamp_contact(UserState& user) const {
     // name, which is right: colouring a stranger as a friend because a file was locked would be
     // worse than not colouring a friend at all.
     if (!contacts_known_) return;
-    const auto it = contacts_.find(user.unique_id);
+
+    auto it = contacts_.find(user.unique_id);
+    if (it == contacts_.end()) {
+        // Nothing under that key, so look for the identity itself. A unique identifier is a long
+        // distinctive string: a stored value containing it *is* this person's entry, whatever
+        // field name it happens to be filed under. This is what makes the read independent of a
+        // schema nobody has documented.
+        for (const std::string& blob : contact_blobs_) {
+            Contact found;
+            if (!contact_from_blob(blob, user.unique_id, found)) continue;
+            it = contacts_.emplace(user.unique_id, std::move(found)).first;
+            break;
+        }
+    }
     if (it == contacts_.end()) {
         user.is_friend = false;
         user.is_blocked = false;
@@ -258,8 +271,9 @@ void TsState::stamp_contact(UserState& user) const {
     else user.contact_flag.reset();
 }
 
-void TsState::set_contacts(std::vector<Contact> contacts) {
+void TsState::set_contacts(std::vector<Contact> contacts, std::vector<std::string> blobs) {
     contacts_.clear();
+    contact_blobs_ = std::move(blobs);
     for (Contact& c : contacts) {
         const std::string key = c.unique_id;
         contacts_.emplace(key, std::move(c));

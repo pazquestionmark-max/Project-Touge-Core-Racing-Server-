@@ -36,6 +36,18 @@ struct Contact {
 /// that a client update could change.
 std::vector<Contact> parse_contacts(const std::vector<sqlite::Row>& rows);
 
+/// Every text value in `rows` that looks like a contact entry, kept verbatim.
+///
+/// The last resort, and the one that depends on nothing: a client's unique identity is a long
+/// distinctive string, so a blob containing it *is* that person's entry, whatever key it is
+/// filed under. Used when the structured parse finds nobody, which is what happens whenever a
+/// field name is spelled differently than expected.
+std::vector<std::string> contact_blobs(const std::vector<sqlite::Row>& rows);
+
+/// Pulls the contact state out of one raw blob for the given identity. Returns false when the
+/// blob does not mention them.
+bool contact_from_blob(const std::string& blob, const std::string& unique_id, Contact& out);
+
 /// What a read of the contact list actually did, so a failure says which step failed rather
 /// than just producing no friends.
 struct ContactReadReport {
@@ -44,6 +56,7 @@ struct ContactReadReport {
     std::size_t tables = 0;    ///< how many tables the database holds
     std::size_t rows = 0;      ///< rows in the table that was read
     std::size_t parsed = 0;    ///< rows that yielded an identity
+    std::size_t blobs = 0;     ///< contact-looking values kept for identity matching
     std::string summary() const;
 };
 
@@ -54,7 +67,8 @@ struct ContactReadReport {
 /// case, and every other table is tried after it. A client that renames or restructures its
 /// settings should cost a slower search, not a silently empty friend list.
 bool read_contacts(const std::string& config_dir, std::vector<Contact>& out, std::string& error,
-                   ContactReadReport* report = nullptr);
+                   ContactReadReport* report = nullptr,
+                   std::vector<std::string>* blobs_out = nullptr);
 
 }  // namespace tsro
 

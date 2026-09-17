@@ -155,3 +155,27 @@ TEST(contacts, the_raw_value_is_carried_so_a_wrong_mapping_is_visible) {
     CHECK_EQ(find(contacts, "a=")->raw_flag, 2);
     CHECK_EQ(find(contacts, "b=")->raw_flag, -1);
 }
+
+TEST(contacts, a_contact_is_found_by_its_identity_whatever_the_field_is_called) {
+    // The last resort, and the only part of this that assumes nothing: the unique identifier is
+    // a long distinctive string, so a stored value containing it is that person's entry even
+    // when every field name is one this code has never seen.
+    const std::string blob =
+        "SomeUnexpectedKey=aaaaBBBBccccDDDD=\nContactName=drew\nFriend=2\nVolume=0\n";
+    Contact c;
+    CHECK(contact_from_blob(blob, "aaaaBBBBccccDDDD=", c));
+    CHECK(c.kind == ContactKind::Friend);
+    CHECK_EQ(c.raw_flag, 2);
+}
+
+TEST(contacts, a_blob_that_does_not_mention_them_is_not_their_entry) {
+    Contact c;
+    CHECK(!contact_from_blob("IDENTITY=someone-else=\nFriend=2\n", "aaaa=", c));
+}
+
+TEST(contacts, candidate_values_are_kept_even_when_the_structured_parse_finds_nothing) {
+    const std::vector<sqlite::Row> rows = {
+        {"0", "Unrecognised=aaaaBBBBccccDDDD=\nFriend=2\nNickname=drew\n"}};
+    CHECK(parse_contacts(rows).empty());          // no key it recognises as an identity
+    CHECK_EQ(contact_blobs(rows).size(), static_cast<std::size_t>(1));
+}

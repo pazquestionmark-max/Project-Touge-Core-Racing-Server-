@@ -96,7 +96,7 @@ public:
 
     /// Replaces the contact list read from the client's own settings, and re-stamps everyone
     /// already on screen so a change in TeamSpeak's Contacts dialog shows up without a rejoin.
-    void set_contacts(std::vector<Contact> contacts);
+    void set_contacts(std::vector<Contact> contacts, std::vector<std::string> blobs = {});
     std::size_t contact_count() const noexcept { return contacts_.size(); }
     std::size_t friend_count() const noexcept;
 
@@ -126,7 +126,10 @@ private:
     void stamp_contact(UserState& user) const;
 
     TsQuery& query_;
-    std::map<std::string, Contact> contacts_;
+    /// Mutable from the const stamp: an identity resolved out of a raw value is cached here
+    /// so the scan happens once per person, not once per read of their row.
+    mutable std::map<std::string, Contact> contacts_;
+    std::vector<std::string> contact_blobs_;
     bool contacts_known_ = false;
     OverlayState state_;
     mutable std::mutex snapshot_mutex_;

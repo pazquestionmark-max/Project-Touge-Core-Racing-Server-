@@ -119,13 +119,58 @@ std::vector<Contact> parse_contacts(const std::vector<sqlite::Row>& rows) {
 std::string ContactReadReport::summary() const {
     std::string s = std::to_string(parsed) + " contacts";
     if (!table.empty()) s += " from table '" + table + "'";
-    s += " (" + std::to_string(rows) + " rows, " + std::to_string(tables) + " tables in " + path +
-         ")";
+    s += " (" + std::to_string(rows) + " rows, " + std::to_string(blobs) + " candidate values, " +
+         std::to_string(tables) + " tables in " + path + ")";
     return s;
 }
 
+std::vector<std::string> contact_blobs(const std::vector<sqlite::Row>& rows) {
+    std::vector<std::string> out;
+    for (const sqlite::Row& row : rows) {
+        for (const std::string& column : row) {
+            // Long enough to hold an identity, and carrying at least one key=value pair. That is
+            // all that is assumed about it.
+            if (column.size() < 24 || column.find('=') == std::string::npos) continue;
+            out.push_back(column);
+        }
+    }
+    return out;
+}
+
+bool contact_from_blob(const std::string& blob, const std::string& unique_id, Contact& out) {
+    if (unique_id.empty() || blob.find(unique_id) == std::string::npos) return false;
+    out = Contact{};
+    out.unique_id = unique_id;
+
+    std::size_t at = 0;
+    while (at <= blob.size()) {
+        const std::size_t nl = blob.find('\n', at);
+        const std::string_view line(blob.data() + at,
+                                    (nl == std::string::npos ? blob.size() : nl) - at);
+        at = nl == std::string::npos ? blob.size() + 1 : nl + 1;
+        std::string_view key;
+        std::string_view value;
+        if (!split_setting(line, key, value)) continue;
+        if (same_key(key, "Nickname")) {
+            out.nickname.assign(value);
+        } else if (same_key(key, "Friend")) {
+            out.kind = kind_from(value);
+            out.raw_flag = 0;
+            for (const char ch : value) {
+                if (ch < '0' || ch > '9') {
+                    out.raw_flag = -1;
+                    break;
+                }
+                out.raw_flag = out.raw_flag * 10 + (ch - '0');
+            }
+            if (value.empty()) out.raw_flag = -1;
+        }
+    }
+    return true;
+}
+
 bool read_contacts(const std::string& config_dir, std::vector<Contact>& out, std::string& error,
-                   ContactReadReport* report) {
+                   ContactReadReport* report, std::vector<std::string>* blobs_out) {
     out.clear();
     error.clear();
     ContactReadReport local;
@@ -154,6 +199,9 @@ bool read_contacts(const std::string& config_dir, std::vector<Contact>& out, std
         if (name != "Contacts") order.push_back(name);
     }
 
+    // Everything contact-shaped from every table, kept whatever the structured parse makes of
+    // it. Identity matching against these is what survives a field this code has never seen.
+    std::vector<std::string> blobs;
     for (const std::string& name : order) {
         std::vector<sqlite::Row> rows;
         std::string read_error;
@@ -162,15 +210,23 @@ bool read_contacts(const std::string& config_dir, std::vector<Contact>& out, std
             continue;
         }
         if (rows.empty()) continue;
+
+        std::vector<std::string> from_table = contact_blobs(rows);
+        blobs.insert(blobs.end(), std::make_move_iterator(from_table.begin()),
+                     std::make_move_iterator(from_table.end()));
+
         std::vector<Contact> parsed = parse_contacts(rows);
-        if (parsed.empty()) continue;
-        r.table = name;
-        r.rows = rows.size();
-        r.parsed = parsed.size();
-        out = std::move(parsed);
-        error.clear();
-        return true;
+        if (!parsed.empty() && out.empty()) {
+            r.table = name;
+            r.rows = rows.size();
+            r.parsed = parsed.size();
+            out = std::move(parsed);
+            error.clear();
+        }
     }
+    r.blobs = blobs.size();
+    if (blobs_out != nullptr) *blobs_out = std::move(blobs);
+    if (!out.empty()) return true;
 
     // Nothing found is not a failure -- somebody with no contacts is an ordinary case -- but the
     // report says where we looked, which is what tells the two apart.

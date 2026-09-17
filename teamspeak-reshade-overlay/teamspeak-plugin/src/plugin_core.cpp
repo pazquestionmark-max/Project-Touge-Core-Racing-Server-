@@ -108,7 +108,8 @@ void PluginCore::refresh_contacts(bool force) {
     std::vector<Contact> contacts;
     std::string error;
     ContactReadReport report;
-    if (!read_contacts(config_dir_, contacts, error, &report)) {
+    std::vector<std::string> blobs;
+    if (!read_contacts(config_dir_, contacts, error, &report, &blobs)) {
         if (error != contacts_error_) {
             contacts_error_ = error;
             TSRO_WARN(kComponent, "contact list unavailable: " + error);
@@ -117,7 +118,7 @@ void PluginCore::refresh_contacts(bool force) {
     }
     contacts_error_.clear();
     contacts_report_ = report.summary();
-    state_.set_contacts(std::move(contacts));
+    state_.set_contacts(std::move(contacts), std::move(blobs));
     TSRO_INFO(kComponent, "contacts: " + contacts_report_ + ", " +
                               std::to_string(state_.friend_count()) + " friends");
 }
