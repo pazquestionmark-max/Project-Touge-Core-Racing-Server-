@@ -242,8 +242,9 @@ ResolvedUser resolve_user(const UserState& u, const Config& cfg, float speaking_
     }
 
     const IndicatorsConfig& ind = cfg.indicators;
+    // The resting colour, in increasing order of specificity: everyone, then friends, then
+    // anyone given a colour of their own. A voice state below replaces whichever of these won.
     r.name_color = cfg.appearance.text_default;
-    // A friend colour is a default, not an override: an explicit per-user colour still wins.
     if (r.is_friend && cfg.user_list.color_friends) r.name_color = cfg.user_list.friend_color;
     if (ov != nullptr && ov->name_color) r.name_color = *ov->name_color;
     if (u.is_self && cfg.user_list.highlight_local_user && (ov == nullptr || !ov->name_color))
@@ -275,18 +276,10 @@ ResolvedUser resolve_user(const UserState& u, const Config& cfg, float speaking_
     if (mic_muted) apply_text(ind.mic_muted, ov ? ov->muted_color : std::nullopt);
     if (spk_muted) apply_text(ind.speaker_muted, ov ? ov->muted_color : std::nullopt);
 
-    // Who someone is outranks what they are currently doing. A friend who has muted their mic
-    // is still a friend, and the mute is already unmistakable from its icon and the dimmed row,
-    // so nothing is lost by keeping the name in its identity colour -- whereas losing it means
-    // the friend colour looks like it does nothing, which is exactly how this was reported.
-    //
-    // Your own row is deliberately not in this: your own mute state is feedback you want, and
-    // you already know which row is yours.
-    if (ov != nullptr && ov->name_color) {
-        r.name_color = *ov->name_color;
-    } else if (r.is_friend && cfg.user_list.color_friends) {
-        r.name_color = cfg.user_list.friend_color;
-    }
+    // State beats identity here, deliberately. The friend colour is the *resting* colour: it
+    // says who someone is when there is nothing more urgent to say about them. Muted, speaker
+    // muted and away each say something you need to act on, so they take the name while they
+    // last and the friend colour returns the moment they clear.
 
     if (u.talking && ind.speaking.enabled) {
         r.speaking = true;

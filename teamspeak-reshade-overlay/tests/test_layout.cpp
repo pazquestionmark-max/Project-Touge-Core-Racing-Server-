@@ -918,32 +918,48 @@ TEST(layout, microphone_mute_alone_still_shows_as_microphone_mute) {
     CHECK_EQ(r.name_color.to_hex(), cfg.indicators.mic_muted.text_color.to_hex());
 }
 
-TEST(layout, a_muted_friend_keeps_the_friend_colour) {
-    // The reported bug: friends were being read from TeamSpeak and tagged correctly, but any
-    // muted friend came out in the mute grey, so the colour looked like it did nothing.
+TEST(layout, an_unmuted_friend_shows_the_friend_colour) {
     Config cfg = Config::defaults();
     UserState u = make_user("a=", "Alice");
     u.is_friend = true;
-    u.input_muted = true;
-    u.output_muted = true;
 
-    const ResolvedUser r = resolve_user(u, cfg, 0.0f);
-    CHECK_EQ(r.name_color.to_hex(), cfg.user_list.friend_color.to_hex());
-    // The mute is not lost -- it is still carried by the icon and the dimmed row.
-    CHECK(r.entry_opacity < 1.0f);
+    CHECK_EQ(resolve_user(u, cfg, 0.0f).name_color.to_hex(),
+             cfg.user_list.friend_color.to_hex());
 }
 
-TEST(layout, an_explicit_per_user_colour_still_beats_the_friend_colour) {
+TEST(layout, a_voice_state_takes_the_name_from_the_friend_colour_while_it_lasts) {
+    // The friend colour is the resting colour: it says who someone is when there is nothing
+    // more urgent to say. Muted, speaker muted and away each say something you need to act on,
+    // so each takes the name until it clears.
     Config cfg = Config::defaults();
-    UserOverride ov;
-    ov.name_color = Color{255, 0, 255, 255};
-    cfg.user_overrides["a="] = ov;
-
     UserState u = make_user("a=", "Alice");
     u.is_friend = true;
-    u.input_muted = true;
 
-    CHECK_EQ(resolve_user(u, cfg, 0.0f).name_color.to_hex(), std::string("#FF00FFFF"));
+    u.input_muted = true;
+    CHECK_EQ(resolve_user(u, cfg, 0.0f).name_color.to_hex(),
+             cfg.indicators.mic_muted.text_color.to_hex());
+
+    u.output_muted = true;   // speakers win over the microphone when both are set
+    CHECK_EQ(resolve_user(u, cfg, 0.0f).name_color.to_hex(),
+             cfg.indicators.speaker_muted.text_color.to_hex());
+
+    u = make_user("a=", "Alice");
+    u.is_friend = true;
+    u.away = true;
+    CHECK_EQ(resolve_user(u, cfg, 0.0f).name_color.to_hex(),
+             cfg.indicators.away.text_color.to_hex());
+}
+
+TEST(layout, the_friend_colour_returns_once_the_state_clears) {
+    Config cfg = Config::defaults();
+    UserState u = make_user("a=", "Alice");
+    u.is_friend = true;
+    u.input_muted = false;
+    u.output_muted = false;
+    u.away = false;
+
+    CHECK_EQ(resolve_user(u, cfg, 0.0f).name_color.to_hex(),
+             cfg.user_list.friend_color.to_hex());
 }
 
 TEST(layout, the_configured_friend_value_decides_who_is_a_friend) {
