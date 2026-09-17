@@ -93,6 +93,25 @@ public:
     PipeSecurity() = default;
     PipeSecurity(const PipeSecurity&) = delete;
     PipeSecurity& operator=(const PipeSecurity&) = delete;
+    // Movable so the descriptor can be handed to PipeServer without duplicating it; copying it
+    // would double-free the LocalAlloc'd descriptor.
+    PipeSecurity(PipeSecurity&& other) noexcept
+        : descriptor_(other.descriptor_), attributes_(other.attributes_) {
+        other.descriptor_ = nullptr;
+        other.attributes_ = SECURITY_ATTRIBUTES{};
+        if (descriptor_ != nullptr) attributes_.lpSecurityDescriptor = descriptor_;
+    }
+    PipeSecurity& operator=(PipeSecurity&& other) noexcept {
+        if (this != &other) {
+            if (descriptor_ != nullptr) LocalFree(descriptor_);
+            descriptor_ = other.descriptor_;
+            attributes_ = other.attributes_;
+            other.descriptor_ = nullptr;
+            other.attributes_ = SECURITY_ATTRIBUTES{};
+            if (descriptor_ != nullptr) attributes_.lpSecurityDescriptor = descriptor_;
+        }
+        return *this;
+    }
 
     SECURITY_ATTRIBUTES* attributes() { return &attributes_; }
 

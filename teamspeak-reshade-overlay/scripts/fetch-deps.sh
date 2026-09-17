@@ -8,11 +8,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENDOR="$ROOT/third_party"
 
-# Pinned pair. ReShade resolves the ImGui function table by exact IMGUI_VERSION_NUM, so these
-# two versions must match the pairing documented in docs/compatibility.md. Changing one without
-# the other produces an add-on that loads and then silently fails to draw.
+# Pinned pair. Two separate constraints, both load-bearing:
+#   1. ReShade resolves the ImGui function table by exact IMGUI_VERSION_NUM, so the two versions
+#      must match the pairing in docs/compatibility.md.
+#   2. It must be ImGui's *docking* branch. ReShade's imgui_function_table declares DockSpace,
+#      ImGuiDockNodeFlags and ImGuiWindowClass, which exist only there; against master the
+#      add-on does not compile.
 RESHADE_TAG="v6.4.1"   # RESHADE_API_VERSION 16
-IMGUI_TAG="v1.91.8"    # IMGUI_VERSION_NUM 19180
+IMGUI_TAG="v1.91.8-docking"  # IMGUI_VERSION_NUM 19180, docking branch (see below)
 TS3_SDK_REF="master"   # the SDK is not tagged; pinned by commit below
 TS3_SDK_COMMIT=""      # set to a commit hash to pin exactly
 

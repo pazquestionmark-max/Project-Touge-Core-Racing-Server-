@@ -14,6 +14,7 @@ add_library(tsro_shared STATIC
   src/log.cpp
   src/ipc_server.cpp
   src/overlay_client.cpp
+  src/profile_store.cpp
   src/transport_win32.cpp
   src/transport_posix.cpp
 )

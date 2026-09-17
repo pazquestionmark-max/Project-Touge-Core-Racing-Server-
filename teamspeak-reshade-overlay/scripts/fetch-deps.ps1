@@ -11,7 +11,7 @@
 [CmdletBinding()]
 param(
   [string]$ReShadeTag = 'v6.4.1',   # RESHADE_API_VERSION 16
-  [string]$ImGuiTag   = 'v1.91.8',  # IMGUI_VERSION_NUM 19180
+  [string]$ImGuiTag   = 'v1.91.8-docking', # IMGUI_VERSION_NUM 19180, docking branch
   [string]$Ts3Ref     = 'master',
   [string]$Ts3Commit  = ''
 )

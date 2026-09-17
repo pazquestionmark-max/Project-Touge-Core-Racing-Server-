@@ -10,6 +10,7 @@ add_executable(tsro_tests
   test_triple_buffer.cpp
   test_ipc_integration.cpp
   test_plugin_core.cpp
+  test_profile_store.cpp
   # The plugin's event collection and state machine are platform-independent and are tested
   # against a scripted TeamSpeak client, so no SDK or TeamSpeak install is needed here.
   ${CMAKE_SOURCE_DIR}/teamspeak-plugin/src/plugin_core.cpp
@@ -24,6 +25,6 @@ target_include_directories(tsro_tests
 )
 
 # One ctest entry per suite, so a failure names the area rather than just "tests failed".
-foreach(suite json protocol framing state_store config layout notifications triple_buffer ipc plugin)
+foreach(suite json protocol framing state_store config layout notifications triple_buffer ipc plugin profiles)
   add_test(NAME ${suite} COMMAND tsro_tests ${suite})
 endforeach()
