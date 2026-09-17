@@ -57,7 +57,7 @@ if (Test-Path (Join-Path $sdk '.git')) {
 }
 
 Write-Host ''
-Write-Host "Dependencies are in $vendor:"
+Write-Host "Dependencies are in ${vendor}:"
 Write-Host "  ReShade SDK   $ReShadeTag"
 Write-Host "  Dear ImGui    $ImGuiTag"
 Write-Host "  TeamSpeak SDK $(if ($Ts3Commit) { $Ts3Commit } else { $Ts3Ref })"
