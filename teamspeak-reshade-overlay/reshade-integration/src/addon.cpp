@@ -218,14 +218,6 @@ void on_reshade_overlay(reshade::api::effect_runtime* runtime) {
         // Rebuild on entry and whenever the configuration changed, so edits are reflected.
         state->preview_config = state->config;
         state->preview_config.chat.placement.visible = true;
-        // Give the sample friend an override so the tag and friend colour are actually shown.
-        if (state->preview_config.user_overrides.count("preview-friend=") == 0) {
-            tsro::UserOverride sample;
-            sample.is_friend = true;
-            sample.friend_tag = "Friend Nickname";
-            state->preview_config.user_overrides["preview-friend="] = sample;
-        }
-
         // Seed on entry, and again once the samples have aged out, so the preview keeps showing
         // every notification type instead of emptying after a few seconds.
         if (!state->preview_was_active || state->renderer.notifications_empty()) {

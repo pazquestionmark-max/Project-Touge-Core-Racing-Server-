@@ -31,13 +31,18 @@ void note(std::vector<std::string>& changed, const char* name, const T& before, 
 }  // namespace
 
 std::vector<std::string> supported_capabilities() {
-    // Deliberately conservative: each entry corresponds to something Plugin API 26 actually
-    // reports. Outgoing whisper, whisper targets and avatar images are absent because the API
+    // Deliberately conservative: each entry corresponds to something this plugin actually
+    // supplies. Outgoing whisper, whisper targets and avatar images are absent because the API
     // does not expose them (docs/protocol.md §6).
+    //
+    // "friends" is the one entry that does not come from the plugin API at all: there is no
+    // contact call in the SDK, so it is read from the client's own settings database. It is
+    // still advertised here, because what the overlay needs to know is whether the field will
+    // be populated, not which mechanism filled it.
     return {
         "chat", "whisper_incoming", "commander", "priority_speaker", "recording",
         "away",  "talk_power",       "locally_muted", "speaker_mute_independent",
-        "hardware_state", "country",
+        "hardware_state", "country", "friends",
     };
 }
 
@@ -84,6 +89,8 @@ bool TsState::read_user(std::uint64_t server, std::uint16_t client, UserState& o
     read_bool(q, server, client, UserFlag::IsTalker, u.is_talker);
     read_bool(q, server, client, UserFlag::HasAvatar, u.has_avatar);
     read_int(q, server, client, UserFlag::TalkPower, u.talk_power);
+
+    stamp_contact(u);
 
     std::uint16_t own = 0;
     const bool have_own = q.own_client_id(server, own);
@@ -220,6 +227,42 @@ std::vector<std::string> TsState::refresh_user(std::uint64_t server, std::uint16
     *existing = std::move(fresh);
     refresh_snapshot_cache();
     return changed;
+}
+
+void TsState::stamp_contact(UserState& user) const {
+    // No list read yet means the fields stay absent. The overlay draws "unknown" as an ordinary
+    // name, which is right: colouring a stranger as a friend because a file was locked would be
+    // worse than not colouring a friend at all.
+    if (!contacts_known_) return;
+    const auto it = contacts_.find(user.unique_id);
+    if (it == contacts_.end()) {
+        user.is_friend = false;
+        user.is_blocked = false;
+        user.friend_nickname.clear();
+        return;
+    }
+    user.is_friend = it->second.kind == ContactKind::Friend;
+    user.is_blocked = it->second.kind == ContactKind::Blocked;
+    user.friend_nickname = it->second.nickname;
+}
+
+void TsState::set_contacts(std::vector<Contact> contacts) {
+    contacts_.clear();
+    for (Contact& c : contacts) {
+        const std::string key = c.unique_id;
+        contacts_.emplace(key, std::move(c));
+    }
+    contacts_known_ = true;
+    for (UserState& u : state_.users) stamp_contact(u);
+    refresh_snapshot_cache();
+}
+
+std::size_t TsState::friend_count() const noexcept {
+    std::size_t n = 0;
+    for (const auto& [id, contact] : contacts_) {
+        if (contact.kind == ContactKind::Friend) ++n;
+    }
+    return n;
 }
 
 void TsState::set_connection(std::uint64_t server, ConnectionState state) {

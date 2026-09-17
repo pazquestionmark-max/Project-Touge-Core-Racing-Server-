@@ -251,7 +251,12 @@ OverlayState preview_state() {
     UserState recording = preview_user("preview-g=", "Grace (recording)");
     recording.recording = true;
 
+    // A friend as TeamSpeak reports one: the flag and the nickname come from the client's own
+    // Contacts list, so the preview shows what the live path produces rather than a local
+    // override standing in for it.
     UserState friend_user = preview_user("preview-friend=", "Friend User");
+    friend_user.is_friend = true;
+    friend_user.friend_nickname = "Friend Nickname";
 
     UserState long_name =
         preview_user("preview-h=", "AnExtremelyLongTeamSpeakNicknameForTestingOverflow");

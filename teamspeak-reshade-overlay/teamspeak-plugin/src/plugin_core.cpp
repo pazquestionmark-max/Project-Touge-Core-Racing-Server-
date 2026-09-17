@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "plugin_core.hpp"
 
+#include <chrono>
+
 #include <algorithm>
 
 #include "tsro/log.hpp"
@@ -87,6 +89,38 @@ bool PluginCore::is_active_server(std::uint64_t server) const {
     return active_server_ != 0 && server == active_server_;
 }
 
+void PluginCore::set_config_directory(std::string dir) {
+    config_dir_ = std::move(dir);
+    refresh_contacts(true);
+}
+
+void PluginCore::refresh_contacts(bool force) {
+    if (config_dir_.empty()) return;
+    const std::int64_t now =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count();
+    // Rate-limited because this reads a file: a busy channel raises the events that trigger it
+    // far more often than anyone edits their contact list.
+    if (!force && contacts_read_ms_ != 0 && now - contacts_read_ms_ < 10000) return;
+    contacts_read_ms_ = now;
+
+    std::vector<Contact> contacts;
+    std::string error;
+    if (!read_contacts(config_dir_, contacts, error)) {
+        if (error != contacts_error_) {
+            contacts_error_ = error;
+            TSRO_WARN(kComponent, "contact list unavailable: " + error);
+        }
+        return;
+    }
+    contacts_error_.clear();
+    const std::size_t total = contacts.size();
+    state_.set_contacts(std::move(contacts));
+    TSRO_INFO(kComponent, "contacts: " + std::to_string(total) + " read, " +
+                              std::to_string(state_.friend_count()) + " friends");
+}
+
 void PluginCore::emit_snapshot() {
     if (!ipc_) return;
     ipc_->broadcast(proto::MessageType::StateSnapshot, state_.snapshot(), state_.server_uid());
@@ -122,6 +156,8 @@ void PluginCore::on_connect_status_changed(std::uint64_t server, TsConnectStatus
 
     if (mapped == ConnectionState::Connected) {
         active_server_ = server;
+        // Someone may have edited their contacts between sessions.
+        refresh_contacts(true);
     } else if (server == active_server_ && mapped == ConnectionState::Disconnected) {
         active_server_ = 0;
     } else if (active_server_ != 0 && server != active_server_) {
@@ -332,6 +368,7 @@ void PluginCore::on_channel_updated(std::uint64_t server, std::uint64_t channel)
 }
 
 void PluginCore::on_subscription_finished(std::uint64_t server) {
+    refresh_contacts(false);
     if (!is_active_server(server)) return;
     // Client visibility is only complete once subscription finishes, so this is the first point
     // at which the roster can be trusted.
@@ -402,6 +439,9 @@ std::vector<std::string> PluginCore::diagnostics() const {
                                        ? state_.state().channel.name
                                        : std::string("(none)")));
     lines.push_back("Users in channel: " + std::to_string(state_.state().users.size()));
+    lines.push_back("Contacts: " + std::to_string(state_.contact_count()) + " (" +
+                    std::to_string(state_.friend_count()) + " friends)" +
+                    (contacts_error_.empty() ? std::string() : " -- " + contacts_error_));
     lines.push_back("Events sent: " + std::to_string(events_emitted_));
     lines.push_back("Last event: " + (last_event_.empty() ? std::string("(none)") : last_event_));
     if (ipc_) {

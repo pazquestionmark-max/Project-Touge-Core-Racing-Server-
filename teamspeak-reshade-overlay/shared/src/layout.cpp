@@ -215,10 +215,23 @@ ResolvedUser resolve_user(const UserState& u, const Config& cfg, float speaking_
                     ? ov->display_override
                     : (u.display_name.empty() ? u.nickname : u.display_name);
 
-    // A friend's tag goes in front of their TeamSpeak name, as "[tag] Name".
-    r.is_friend = ov != nullptr && ov->is_friend;
-    if (r.is_friend && cfg.user_list.show_friend_tag && !ov->friend_tag.empty()) {
-        r.friend_tag = "[" + ov->friend_tag + "] ";
+    // Friendship comes from TeamSpeak's own Contacts list, which the plugin reads from the
+    // client's settings and sends alongside everything else. Marking someone here is still
+    // honoured -- it is an addition to that list, not a replacement for it, so a friend the
+    // client does not know about can still be given a colour and a name.
+    const bool from_teamspeak = cfg.user_list.use_teamspeak_friends && u.is_friend.value_or(false);
+    r.is_friend = from_teamspeak || (ov != nullptr && ov->is_friend);
+
+    // The tag the user typed here wins over the one TeamSpeak has, because someone who set one
+    // in this window meant it for this window.
+    std::string tag;
+    if (ov != nullptr && !ov->friend_tag.empty()) {
+        tag = ov->friend_tag;
+    } else if (from_teamspeak) {
+        tag = u.friend_nickname;
+    }
+    if (r.is_friend && cfg.user_list.show_friend_tag && !tag.empty()) {
+        r.friend_tag = "[" + tag + "] ";
         r.display = r.friend_tag + r.display;
     }
 

@@ -80,6 +80,13 @@ struct UserState {
     std::optional<bool> is_talker;
     std::optional<bool> has_avatar;
     std::optional<bool> locally_muted;
+    /// From the client's own Contacts list, read out of its settings.db -- the plugin API has
+    /// no friend call at all. Absent when the list could not be read, which is different from
+    /// "not a friend": the overlay must not colour a stranger green because a file was locked.
+    std::optional<bool> is_friend;
+    std::optional<bool> is_blocked;
+    /// The name the user gave them in TeamSpeak's Contacts dialog, if any.
+    std::string friend_nickname;
     std::optional<int> talk_power;
     std::string away_message;
     std::string country;

@@ -47,6 +47,7 @@ The full table is in [`protocol.md`](protocol.md) §6. The limitations that will
 | Incoming whisper | **Supported** — the `isReceivedWhisper` parameter of `onTalkStatusChangeEvent`. |
 | **Outgoing** whisper | **Not exposed.** No callback reports that *you* are whispering, or to whom. The Whispering settings show only the incoming direction and say so. |
 | Whisper targets, or whispers between other people | **Not exposed.** Not modelled. |
+| Friend / buddy list | **Not in the plugin API.** Read from the client's own `settings.db` instead, read-only. See docs/protocol.md §6. |
 | Avatar **images** | **Not obtainable** through the plugin API. `CLIENT_FLAG_AVATAR` says an avatar exists; fetching the bitmap is not part of the plugin API surface. |
 | Per-user audio level / waveform | **Deliberately not implemented.** `onEditPlaybackVoiceDataEvent` does deliver PCM, but tapping the voice path to drive a decoration would add per-sample work to the audio thread. The speaking animation is timer-driven instead. |
 | `CLIENT_INPUT_DEACTIVATED` for other users | **Own client only**, per the SDK. Omitted for others rather than guessed. |

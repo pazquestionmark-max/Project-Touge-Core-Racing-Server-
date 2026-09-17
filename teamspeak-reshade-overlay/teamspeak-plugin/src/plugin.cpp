@@ -129,6 +129,9 @@ PLUGIN_EXPORT int ts3plugin_init() {
     options.plugin_api_version = kPluginApiVersion;
     g_core = std::make_unique<tsro::plugin::PluginCore>(*g_query, std::move(options));
 
+    // Where the client keeps settings.db, and so where its contact list lives.
+    g_core->set_config_directory(configuration_directory());
+
     std::string error;
     if (!g_core->start(error)) {
         TSRO_ERROR("plugin", "could not start the overlay endpoint: " + error);

@@ -44,6 +44,13 @@ public:
     bool start(std::string& error);
     void stop();
 
+    /// TeamSpeak's own configuration folder, from getConfigPath. That is where the client keeps
+    /// the contact list the overlay reads its friends from.
+    void set_config_directory(std::string dir);
+    /// Re-reads the contact list, at most once every few seconds unless forced. Cheap when
+    /// nothing changed and the only way friends stay current without a plugin API for them.
+    void refresh_contacts(bool force);
+
     // --- TeamSpeak callbacks, normalised ---
     void on_connect_status_changed(std::uint64_t server, TsConnectStatus status,
                                    unsigned error_code);
@@ -86,6 +93,9 @@ private:
     std::uint64_t active_server_ = 0;
     std::uint64_t last_channel_ = 0;
     ConnectionState last_connection_ = ConnectionState::Disconnected;
+    std::string config_dir_;
+    std::int64_t contacts_read_ms_ = 0;
+    std::string contacts_error_;
     std::uint64_t next_chat_id_ = 1;
     std::uint64_t events_emitted_ = 0;
     std::string last_event_;

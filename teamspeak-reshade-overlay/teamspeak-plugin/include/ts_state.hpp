@@ -13,11 +13,13 @@
 #define TSRO_TS_STATE_HPP
 
 #include <cstdint>
+#include <map>
 #include <mutex>
 #include <string>
 #include <vector>
 
 #include "tsro/model.hpp"
+#include "tsro/ts_contacts.hpp"
 
 namespace tsro::plugin {
 
@@ -91,6 +93,12 @@ public:
     bool read_user(std::uint64_t server, std::uint16_t client, UserState& out) const;
     bool read_channel(std::uint64_t server, std::uint64_t channel, ChannelState& out) const;
 
+    /// Replaces the contact list read from the client's own settings, and re-stamps everyone
+    /// already on screen so a change in TeamSpeak's Contacts dialog shows up without a rejoin.
+    void set_contacts(std::vector<Contact> contacts);
+    std::size_t contact_count() const noexcept { return contacts_.size(); }
+    std::size_t friend_count() const noexcept;
+
     void set_connection(std::uint64_t server, ConnectionState state);
     /// Returns true when the talking or whisper state actually changed.
     bool set_talking(std::uint16_t client, bool talking, bool whisper);
@@ -112,8 +120,13 @@ public:
 
 private:
     UserState* find_mutable(std::uint16_t client);
+    /// Applies the contact list to one user. Leaves the fields absent when no list has been
+    /// read: "we do not know" and "not a friend" must not look the same to the overlay.
+    void stamp_contact(UserState& user) const;
 
     TsQuery& query_;
+    std::map<std::string, Contact> contacts_;
+    bool contacts_known_ = false;
     OverlayState state_;
     mutable std::mutex snapshot_mutex_;
     json::Value snapshot_cache_{json::Object{}};

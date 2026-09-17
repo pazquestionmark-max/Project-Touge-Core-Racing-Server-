@@ -86,7 +86,8 @@ server had to drop queued events. Replaces all client state for that server.
   "away": false, "away_message": "", "recording": false,
   "channel_commander": true, "priority_speaker": false,
   "is_talker": true, "talk_power": 75, "has_avatar": true,
-  "locally_muted": false, "is_self": false, "country": "GB" }
+  "locally_muted": false, "is_self": false, "country": "GB",
+  "is_friend": true, "is_blocked": false, "friend_nickname": "Chief" }
 ```
 **Fields the SDK could not supply for this client are omitted entirely**, not defaulted. A
 receiver must treat absent as "unknown — hide the indicator", not as `false`.
@@ -251,6 +252,7 @@ TeamSpeak's Plugin API 26 actually exposes.
 | `has_avatar` | `CLIENT_FLAG_AVATAR` | Flag only. |
 | avatar **image** | — | **Not obtainable through the plugin API.** The flag says an avatar exists; retrieving the bitmap is not part of the plugin API surface. The overlay shows an initial-letter badge instead, which is stated in the UI. |
 | `country` | `CLIENT_COUNTRY` | Supported |
+| `is_friend` / `is_blocked` / `friend_nickname` | — | **Not in the plugin API at all.** The whole SDK has no contact, friend or buddy call; the word appears only in a comment noting the client has already filtered a message. The list lives in the client's `settings.db`, keyed by the same unique identity used everywhere else, so the plugin reads it from there — read-only, never locking, never writing — and re-reads it on connect and when a channel roster is rebuilt, rate-limited to once every ten seconds. Absent when the file cannot be read, which the overlay treats as *unknown* rather than *not a friend*. |
 | channel name / parent / topic | `CHANNEL_NAME`, `getParentChannelOfChannel`, `CHANNEL_TOPIC` | Supported |
 | server name / uid | `VIRTUALSERVER_NAME`, `VIRTUALSERVER_UNIQUE_IDENTIFIER` | Supported |
 | chat messages | `ts3plugin_onTextMessageEvent` | Supported for channel, server and private targets |

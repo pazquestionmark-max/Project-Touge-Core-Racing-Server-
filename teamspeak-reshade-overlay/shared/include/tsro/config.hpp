@@ -251,6 +251,9 @@ struct UserListConfig {
     bool show_avatar_initial = false; ///< see docs/protocol.md §6: avatar images are unavailable
     float indicator_gap = 4.0f;
 
+    /// Use the friend list from TeamSpeak's own Contacts, which the plugin reads out of the
+    /// client's settings. Off falls back to whoever is marked a friend here, in Advanced.
+    bool use_teamspeak_friends = true;
     /// Colour applied to anyone marked as a friend, unless they have their own name colour.
     bool color_friends = true;
     Color friend_color{126, 231, 135, 255};

@@ -15,6 +15,8 @@ add_library(tsro_shared STATIC
   src/ipc_server.cpp
   src/overlay_client.cpp
   src/profile_store.cpp
+  src/sqlite_read.cpp
+  src/ts_contacts.cpp
   src/transport_win32.cpp
   src/transport_posix.cpp
 )

@@ -450,6 +450,7 @@ json::Value Config::to_json() const {
         o.set("show_overflow_count", json::Value(u.show_overflow_count));
         o.set("show_avatar_initial", json::Value(u.show_avatar_initial));
         o.set("indicator_gap", json::Value(u.indicator_gap));
+        o.set("use_teamspeak_friends", json::Value(u.use_teamspeak_friends));
         o.set("color_friends", json::Value(u.color_friends));
         o.set("friend_color", json::Value(u.friend_color.to_hex()));
         o.set("show_friend_tag", json::Value(u.show_friend_tag));
@@ -696,6 +697,7 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         u.b("show_overflow_count", x.show_overflow_count);
         u.b("show_avatar_initial", x.show_avatar_initial);
         u.f("indicator_gap", x.indicator_gap, 0.0f, 64.0f);
+        u.b("use_teamspeak_friends", x.use_teamspeak_friends);
         u.b("color_friends", x.color_friends);
         u.col("friend_color", x.friend_color);
         u.b("show_friend_tag", x.show_friend_tag);

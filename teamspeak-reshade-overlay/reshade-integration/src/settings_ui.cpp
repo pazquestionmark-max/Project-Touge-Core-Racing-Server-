@@ -494,10 +494,13 @@ void SettingsUi::tab_users(Config& config, const OverlayFrame& frame, SettingsAc
 
     ImGui::SeparatorText("Friends");
     ImGui::TextWrapped(
-        "TeamSpeak's own friend list cannot be read by a plugin -- it lives in the client's local "
-        "Contacts database and is not part of the plugin API. Mark people as friends here "
-        "instead; it is keyed on the same TeamSpeak identity as everything else, so it survives "
-        "nickname changes and reconnects.");
+        "Friends come from TeamSpeak's own Contacts list. There is no friend call anywhere in "
+        "the plugin API, so the plugin reads the client's settings database directly -- "
+        "read-only, and never while TeamSpeak holds a lock. Anyone you add in TeamSpeak's "
+        "Contacts dialog appears here without being entered twice; the list below is for "
+        "people TeamSpeak does not know about, and anything set there wins.");
+    actions.config_changed |=
+        ImGui::Checkbox("Use TeamSpeak's Contacts list", &config.user_list.use_teamspeak_friends);
     actions.config_changed |=
         ImGui::Checkbox("Colour friends differently", &config.user_list.color_friends);
     if (config.user_list.color_friends) {
@@ -1525,6 +1528,11 @@ void SettingsUi::basic_view(Config& config, const LinkDiagnostics& diagnostics,
         actions.config_changed |=
             colour_edit("Channel Commander", config.indicators.commander.icon_color);
         ImGui::SeparatorText("Friends");
+        actions.config_changed |=
+            ImGui::Checkbox("Use TeamSpeak's Contacts list", &ul.use_teamspeak_friends);
+        help("Friends come from TeamSpeak itself: the plugin reads the client's own Contacts, "
+             "so anyone you added there is already a friend here. Their TeamSpeak nickname is "
+             "what shows in [brackets].");
         actions.config_changed |= ImGui::Checkbox("Colour friends differently", &ul.color_friends);
         if (ul.color_friends) actions.config_changed |= colour_edit("Friend", ul.friend_color);
         actions.config_changed |= ImGui::Checkbox("Show their [nickname]", &ul.show_friend_tag);

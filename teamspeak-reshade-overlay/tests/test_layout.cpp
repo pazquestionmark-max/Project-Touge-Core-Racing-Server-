@@ -835,3 +835,63 @@ TEST(layout, stealth_mode_off_keeps_everyone) {
         connected_state({make_user("a=", "Alice"), make_user("b=", "Bob")});
     CHECK_EQ(order_users(state, cfg).size(), static_cast<std::size_t>(2));
 }
+
+TEST(layout, a_friend_from_teamspeaks_own_contacts_is_styled_without_any_local_setup) {
+    // The point of reading the client's contact list: nobody should have to re-enter in this
+    // window the friends they already added in TeamSpeak.
+    Config cfg = Config::defaults();
+    UserState u = make_user("a=", "Alice");
+    u.is_friend = true;
+    u.friend_nickname = "Chief";
+
+    const ResolvedUser r = resolve_user(u, cfg, 0.0f);
+    CHECK(r.is_friend);
+    CHECK_EQ(r.display, std::string("[Chief] Alice"));
+    CHECK_EQ(r.name_color.to_hex(), cfg.user_list.friend_color.to_hex());
+}
+
+TEST(layout, a_teamspeak_friend_with_no_nickname_keeps_their_name) {
+    Config cfg = Config::defaults();
+    UserState u = make_user("a=", "Alice");
+    u.is_friend = true;
+
+    const ResolvedUser r = resolve_user(u, cfg, 0.0f);
+    CHECK(r.is_friend);
+    CHECK_EQ(r.display, std::string("Alice"));
+    CHECK(r.friend_tag.empty());
+}
+
+TEST(layout, teamspeak_friends_can_be_switched_off) {
+    Config cfg = Config::defaults();
+    cfg.user_list.use_teamspeak_friends = false;
+    UserState u = make_user("a=", "Alice");
+    u.is_friend = true;
+    u.friend_nickname = "Chief";
+
+    const ResolvedUser r = resolve_user(u, cfg, 0.0f);
+    CHECK(!r.is_friend);
+    CHECK_EQ(r.display, std::string("Alice"));
+}
+
+TEST(layout, a_tag_set_here_wins_over_the_one_teamspeak_has) {
+    Config cfg = Config::defaults();
+    UserOverride ov;
+    ov.is_friend = true;
+    ov.friend_tag = "Mine";
+    cfg.user_overrides["a="] = ov;
+
+    UserState u = make_user("a=", "Alice");
+    u.is_friend = true;
+    u.friend_nickname = "Theirs";
+
+    CHECK_EQ(resolve_user(u, cfg, 0.0f).display, std::string("[Mine] Alice"));
+}
+
+TEST(layout, an_unknown_friend_state_is_not_treated_as_a_friend) {
+    // is_friend absent means the contact list could not be read. Coloring a stranger as a
+    // friend because a file was locked is worse than not colouring a friend.
+    Config cfg = Config::defaults();
+    const ResolvedUser r = resolve_user(make_user("a=", "Alice"), cfg, 0.0f);
+    CHECK(!r.is_friend);
+    CHECK_EQ(r.name_color.to_hex(), cfg.appearance.text_default.to_hex());
+}
