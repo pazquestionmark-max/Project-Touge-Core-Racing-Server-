@@ -48,7 +48,9 @@ INCLUDES=(
   -I"$ROOT/third_party/reshade/include"
   -I"$ROOT/third_party/ts3client-pluginsdk/include"
 )
-FLAGS=(-std=c++17 -fsyntax-only -Wall -Wextra -DTSRO_VERSION='"1.0.0"'
+# -Wshadow earns its place: MSVC's C4457 (a local hiding a parameter) is an error under
+# warnings-as-errors in CI, and -Wall -Wextra alone does not report it.
+FLAGS=(-std=c++17 -fsyntax-only -Wall -Wextra -Wshadow -DTSRO_VERSION='"1.0.0"'
        -DWIN32_LEAN_AND_MEAN -DNOMINMAX -include objbase.h)
 
 SOURCES=(

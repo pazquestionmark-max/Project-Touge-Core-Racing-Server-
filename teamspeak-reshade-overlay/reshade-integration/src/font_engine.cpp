@@ -2,6 +2,7 @@
 #include "font_engine.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -16,6 +17,11 @@
 
 // stb_truetype, vendored with Dear ImGui. STBTT_STATIC keeps every symbol internal to this
 // translation unit, so nothing here can collide with a copy ReShade or the game already has.
+// The cost of that is one MSVC warning per entry point the overlay does not call, which says
+// nothing about this code and would otherwise fail a warnings-as-errors build.
+#if defined(_MSC_VER)
+#pragma warning(disable : 4505)   // unreferenced function with internal linkage removed
+#endif
 #define STBTT_STATIC
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "imstb_truetype.h"
@@ -380,13 +386,13 @@ struct FontEngine::Impl {
                     (static_cast<std::size_t>(dst_y + y) * static_cast<std::size_t>(dim) +
                      static_cast<std::size_t>(dst_x)) * 4u;
                 for (int x = 0; x < r.w; ++x) {
-                    const unsigned char a =
+                    const unsigned char coverage =
                         r.bitmap[static_cast<std::size_t>(y) * static_cast<std::size_t>(r.w) +
                                  static_cast<std::size_t>(x)];
                     row[x * 4 + 0] = 255;
                     row[x * 4 + 1] = 255;
                     row[x * 4 + 2] = 255;
-                    row[x * 4 + 3] = a;
+                    row[x * 4 + 3] = coverage;
                 }
             }
         }
