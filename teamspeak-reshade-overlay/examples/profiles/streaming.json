@@ -1,0 +1,65 @@
+{
+  "config_version": 1,
+  "_comment": [
+    "Streaming: assumes the overlay is on camera. Everything that could leak a private",
+    "conversation is off, names are larger and higher-contrast for viewers watching a",
+    "compressed stream, and the panel is opaque enough to survive bitrate starvation.",
+    "Private messages and chat-content logging are both off and should stay that way."
+  ],
+  "general": {
+    "profile_name": "streaming",
+    "master_opacity": 1.0,
+    "scale": 1.15
+  },
+  "appearance": {
+    "font_size": 18,
+    "icon_size": 14,
+    "row_height": 28,
+    "padding_x": 14,
+    "padding_y": 10,
+    "corner_radius": 8,
+    "show_panel_background": true,
+    "panel_background": "#0C0F14E0",
+    "panel_border": "#FFFFFF33",
+    "text_shadow": true,
+    "text_default": "#F2F5FAFF"
+  },
+  "channel_title": {
+    "placement": { "visible": true, "anchor": "top_left", "x": 28, "y": 24, "align": "left" },
+    "show_parent": false,
+    "show_user_count": true,
+    "show_server_name": false,
+    "show_background": true,
+    "font_scale": 1.1
+  },
+  "user_list": {
+    "placement": { "visible": true, "anchor": "top_left", "x": 28, "y": 66, "align": "left" },
+    "max_visible_users": 12,
+    "max_name_width": 240,
+    "name_overflow": "ellipsis",
+    "speaking_first": false,
+    "sort": "alphabetical"
+  },
+  "chat": {
+    "placement": { "visible": false },
+    "show_channel_messages": false,
+    "show_server_messages": false,
+    "show_private_messages": false
+  },
+  "notifications": {
+    "placement": { "visible": true, "anchor": "top_right", "x": 28, "y": 24, "align": "right" },
+    "max_visible": 3,
+    "join": { "enabled": true },
+    "leave": { "enabled": true },
+    "chat": { "enabled": false },
+    "whisper": { "enabled": false }
+  },
+  "logging": {
+    "include_message_content": false
+  },
+  "animation": {
+    "speaking": "pulse",
+    "speaking_pulse_hz": 1.8,
+    "speaking_pulse_depth": 0.3
+  }
+}

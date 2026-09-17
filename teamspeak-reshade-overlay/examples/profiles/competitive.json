@@ -1,0 +1,59 @@
+{
+  "config_version": 1,
+  "_comment": [
+    "Competitive: the least possible distraction. No background, no notifications, no chat,",
+    "and the overlay fades out when nothing is happening. Speaking is the only thing that",
+    "draws the eye, and Channel Commander stays visible because it usually means the shot-caller."
+  ],
+  "general": {
+    "profile_name": "competitive",
+    "master_opacity": 0.72,
+    "scale": 0.85,
+    "show_when_disconnected": false,
+    "show_when_plugin_unavailable": false
+  },
+  "appearance": {
+    "font_size": 13,
+    "icon_size": 9,
+    "row_height": 16,
+    "row_spacing": 0,
+    "padding_x": 2,
+    "padding_y": 0,
+    "show_panel_background": false,
+    "text_shadow": true,
+    "text_default": "#C8CDD6FF",
+    "accent": "#7EE787FF"
+  },
+  "channel_title": { "placement": { "visible": false } },
+  "user_list": {
+    "placement": { "visible": true, "anchor": "center_left", "x": 12, "y": -120, "align": "left" },
+    "show_local_user": false,
+    "show_muted_users": false,
+    "speaking_first": true,
+    "sort": "speaking_first",
+    "max_visible_users": 6,
+    "max_name_width": 110,
+    "name_overflow": "ellipsis"
+  },
+  "indicators": {
+    "speaking": { "enabled": true, "icon": "none", "override_text_color": true,
+                  "text_color": "#7EE787FF", "glow": false, "show_border": false },
+    "mic_muted": { "enabled": true, "icon": "microphone_muted", "icon_scale": 0.8,
+                   "dim_entry": true, "dim_amount": 0.6 },
+    "speaker_muted": { "enabled": true, "icon": "speaker_muted", "icon_scale": 0.8 },
+    "commander": { "enabled": true, "icon": "circle", "icon_color": "#FF952BFF" },
+    "away": { "enabled": false },
+    "recording": { "enabled": true },
+    "priority_speaker": { "enabled": false }
+  },
+  "notifications": { "placement": { "visible": false } },
+  "chat": { "placement": { "visible": false } },
+  "animation": {
+    "speaking": "color_fade",
+    "speaking_attack_ms": 40,
+    "speaking_release_ms": 140,
+    "fade_when_idle": true,
+    "idle_after_ms": 8000,
+    "idle_opacity": 0.25
+  }
+}

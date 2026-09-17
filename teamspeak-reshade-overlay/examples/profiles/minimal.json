@@ -1,0 +1,47 @@
+{
+  "config_version": 1,
+  "_comment": [
+    "Minimal: a single line of names in the top-left corner, no panel, no chat, no toasts.",
+    "Profiles may be partial. Anything not listed here keeps its default, so this file shows",
+    "only what differs. The overlay merges it with the defaults on load."
+  ],
+  "general": {
+    "profile_name": "minimal",
+    "master_opacity": 0.85,
+    "scale": 0.9
+  },
+  "appearance": {
+    "font_size": 14,
+    "icon_size": 10,
+    "row_height": 18,
+    "row_spacing": 1,
+    "padding_x": 4,
+    "padding_y": 2,
+    "show_panel_background": false,
+    "text_shadow": true
+  },
+  "channel_title": {
+    "placement": { "visible": true, "anchor": "top_left", "x": 16, "y": 12, "align": "left" },
+    "show_parent": false,
+    "show_user_count": true,
+    "font_scale": 1.0
+  },
+  "user_list": {
+    "placement": { "visible": true, "anchor": "top_left", "x": 16, "y": 34, "align": "left" },
+    "show_local_user": false,
+    "max_visible_users": 8,
+    "max_name_width": 140,
+    "name_overflow": "ellipsis"
+  },
+  "notifications": {
+    "placement": { "visible": false, "anchor": "top_right", "x": 16, "y": 16, "align": "right" }
+  },
+  "chat": {
+    "placement": { "visible": false, "anchor": "bottom_left", "x": 16, "y": 16, "align": "left" }
+  },
+  "animation": {
+    "speaking": "color_fade",
+    "speaking_attack_ms": 60,
+    "speaking_release_ms": 180
+  }
+}

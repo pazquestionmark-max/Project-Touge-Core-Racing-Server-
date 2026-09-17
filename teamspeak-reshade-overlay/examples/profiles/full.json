@@ -1,0 +1,90 @@
+{
+  "config_version": 1,
+  "_comment": [
+    "Full: everything switched on, for people who want the overlay to be the whole picture.",
+    "Channel title with parent and count, a panelled user list, notifications bottom-right and",
+    "the channel chat feed bottom-left. Private messages remain off: turn them on deliberately,",
+    "knowing they will be visible to anyone watching your screen or your stream."
+  ],
+  "general": {
+    "profile_name": "full",
+    "master_opacity": 0.95,
+    "scale": 1.0
+  },
+  "appearance": {
+    "font_size": 16,
+    "icon_size": 12,
+    "row_height": 24,
+    "row_spacing": 2,
+    "padding_x": 12,
+    "padding_y": 10,
+    "corner_radius": 6,
+    "show_panel_background": true,
+    "panel_background": "#10141AC0",
+    "panel_border": "#FFFFFF28",
+    "text_shadow": true
+  },
+  "channel_title": {
+    "placement": { "visible": true, "anchor": "top_center", "x": 0, "y": 20, "align": "center" },
+    "show_parent": true,
+    "show_user_count": true,
+    "show_server_name": true,
+    "show_background": true,
+    "show_border": true,
+    "icon": "diamond",
+    "font_scale": 1.2
+  },
+  "user_list": {
+    "placement": { "visible": true, "anchor": "top_right", "x": 24, "y": 24, "align": "left" },
+    "show_local_user": true,
+    "highlight_local_user": true,
+    "show_muted_users": true,
+    "speaking_first": true,
+    "sort": "alphabetical",
+    "max_visible_users": 20,
+    "max_name_width": 220,
+    "name_overflow": "shrink",
+    "show_overflow_count": true
+  },
+  "indicators": {
+    "speaking": { "enabled": true, "glow": true, "show_border": true },
+    "whispering": { "enabled": true },
+    "mic_muted": { "enabled": true },
+    "speaker_muted": { "enabled": true },
+    "away": { "enabled": true },
+    "recording": { "enabled": true },
+    "commander": { "enabled": true },
+    "priority_speaker": { "enabled": true },
+    "locally_muted": { "enabled": true },
+    "suppressed": { "enabled": true }
+  },
+  "notifications": {
+    "placement": { "visible": true, "anchor": "bottom_right", "x": 24, "y": 24, "align": "right" },
+    "max_visible": 5,
+    "stack": "up",
+    "width": 320,
+    "join": { "enabled": true },
+    "leave": { "enabled": true },
+    "channel_switch": { "enabled": true },
+    "connection": { "enabled": true },
+    "whisper": { "enabled": true }
+  },
+  "chat": {
+    "placement": { "visible": true, "anchor": "bottom_left", "x": 24, "y": 24, "align": "left" },
+    "show_channel_messages": true,
+    "show_server_messages": true,
+    "show_private_messages": false,
+    "max_visible_messages": 8,
+    "history_size": 80,
+    "show_timestamp": true,
+    "show_sender": true,
+    "show_category_icon": true,
+    "wrap": true,
+    "width": 460
+  },
+  "animation": {
+    "enabled": true,
+    "speaking": "glow",
+    "animate_list_reorder": true
+  }
+}

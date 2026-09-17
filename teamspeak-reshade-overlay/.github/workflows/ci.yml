@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  core:
+    name: Core tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S teamspeak-reshade-overlay -B build -DCMAKE_BUILD_TYPE=Debug -DTSRO_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  windows-sources:
+    name: Windows sources cross-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MinGW
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+      - name: Fetch pinned dependencies
+        run: teamspeak-reshade-overlay/scripts/fetch-deps.sh
+      - name: Cross-compile the Windows-only sources
+        run: teamspeak-reshade-overlay/scripts/check-windows-sources.sh
+
+  node:
+    name: Tooling tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # The schema-parity tests compare against the real C++ validator, so build it first;
+      # without this they would skip and the two implementations could drift unnoticed.
+      - name: Build the C++ config tool
+        run: |
+          cmake -S teamspeak-reshade-overlay -B build -DCMAKE_BUILD_TYPE=Release -DTSRO_BUILD_TESTS=OFF
+          cmake --build build -j --target tsro_config
+      - name: Install
+        working-directory: teamspeak-reshade-overlay/tools/tsro-cli
+        run: npm install
+      - name: Typecheck
+        working-directory: teamspeak-reshade-overlay/tools/tsro-cli
+        run: npm run typecheck
+      - name: Test
+        working-directory: teamspeak-reshade-overlay/tools/tsro-cli
+        run: npm test
+
+  examples:
+    name: Example profiles validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the config tool
+        run: |
+          cmake -S teamspeak-reshade-overlay -B build -DCMAKE_BUILD_TYPE=Release -DTSRO_BUILD_TESTS=OFF
+          cmake --build build -j --target tsro_config
+      - name: Validate every shipped profile
+        run: ./build/tools/config-tool/tsro-config validate teamspeak-reshade-overlay/examples/profiles/*.json
+
+  windows:
+    name: Windows build (authoritative)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned dependencies
+        shell: pwsh
+        run: teamspeak-reshade-overlay/scripts/fetch-deps.ps1
+      - name: Configure
+        run: >
+          cmake -S teamspeak-reshade-overlay -B build -A x64
+          -DTSRO_BUILD_PLUGIN=ON -DTSRO_BUILD_ADDON=ON -DTSRO_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build --config Release -j
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Stage the distribution
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/plugin, dist/addon, dist/profiles | Out-Null
+          Copy-Item build/teamspeak-plugin/Release/*.dll dist/plugin/
+          Copy-Item build/reshade-integration/Release/*.addon64 dist/addon/
+          Copy-Item teamspeak-reshade-overlay/examples/profiles/*.json dist/profiles/
+          Copy-Item teamspeak-reshade-overlay/docs/installation.md, teamspeak-reshade-overlay/docs/troubleshooting.md, teamspeak-reshade-overlay/LICENSE dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teamspeak-reshade-overlay-windows-x64
+          path: dist/

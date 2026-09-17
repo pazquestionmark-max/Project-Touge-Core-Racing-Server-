@@ -29,6 +29,7 @@ else()
 endif()
 
 add_subdirectory(shared)
+add_subdirectory(tools/config-tool)
 
 if(TSRO_BUILD_PLUGIN)
   add_subdirectory(teamspeak-plugin)
