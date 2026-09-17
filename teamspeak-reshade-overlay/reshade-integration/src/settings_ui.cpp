@@ -1155,12 +1155,24 @@ void SettingsUi::tab_diagnostics(const LinkDiagnostics& diagnostics, const Overl
                     config.user_list.color_friends ? "on" : "OFF");
         ImGui::Text("Use TeamSpeak's Contacts: %s",
                     config.user_list.use_teamspeak_friends ? "on" : "OFF");
+        if (ImGui::InputInt("Friend= value meaning friend",
+                            &config.user_list.teamspeak_friend_value)) {
+            actions.config_changed = true;
+        }
+        help("TeamSpeak stores the three contact states as a number and documents which is "
+             "which nowhere. 2 is Friend, matching the order its own Contacts dialog lists "
+             "them: Neutral, Blocked, Friend. If a client ever renumbers them, the raw value "
+             "printed beside each person below is what to put here.");
         for (const UserState& user : frame.state.users) {
             const char* reported = !user.is_friend.has_value() ? "unknown"
                                                                : (*user.is_friend ? "friend"
                                                                                   : "not a friend");
-            ImGui::Text("%s -- TeamSpeak says: %s%s%s", user.display_name.c_str(), reported,
-                        user.friend_nickname.empty() ? "" : ", nickname: ",
+            char raw[32] = "none";
+            if (user.contact_flag.has_value()) {
+                std::snprintf(raw, sizeof(raw), "%d", *user.contact_flag);
+            }
+            ImGui::Text("%s -- TeamSpeak says: %s (Friend=%s)%s%s", user.display_name.c_str(),
+                        reported, raw, user.friend_nickname.empty() ? "" : ", nickname: ",
                         user.friend_nickname.c_str());
         }
         ImGui::TextDisabled(

@@ -17,13 +17,16 @@ bool split_setting(std::string_view line, std::string_view& key, std::string_vie
     return !key.empty();
 }
 
-/// TeamSpeak stores the contact state as a small integer.
+/// TeamSpeak stores the contact state as a small integer, in the order its own Contacts dialog
+/// lists the three options: Neutral, Blocked, Friend.
 ///
-/// 0 is a friend, 1 is blocked and anything else is neutral. The overlay only ever *reads* this,
-/// so a client that renumbered them would cost a wrong colour, never a wrong write -- and the
-/// diagnostics panel reports the counts so a mismatch is visible rather than silent.
+/// This was guessed the other way round first, which made every real friend read as blocked and
+/// nobody read as a friend at all. The overlay only ever *reads* this value, so the cost of the
+/// wrong guess was a missing colour rather than damage -- but it is a guess no longer: the
+/// Diagnostics panel prints the raw number per person, and user_list.teamspeak_friend_value
+/// overrides the mapping for a client that ever renumbers them.
 ContactKind kind_from(std::string_view value) {
-    if (value == "0") return ContactKind::Friend;
+    if (value == "2") return ContactKind::Friend;
     if (value == "1") return ContactKind::Blocked;
     return ContactKind::Neutral;
 }
@@ -56,6 +59,15 @@ std::vector<Contact> parse_contacts(const std::vector<sqlite::Row>& rows) {
                     contact.nickname.assign(value);
                 } else if (key == "Friend") {
                     contact.kind = kind_from(value);
+                    contact.raw_flag = 0;
+                    for (const char c : value) {
+                        if (c < '0' || c > '9') {
+                            contact.raw_flag = -1;
+                            break;
+                        }
+                        contact.raw_flag = contact.raw_flag * 10 + (c - '0');
+                    }
+                    if (value.empty()) contact.raw_flag = -1;
                     has_flag = true;
                 }
             }

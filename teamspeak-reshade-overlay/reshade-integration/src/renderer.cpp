@@ -562,7 +562,15 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
     const float bar_w = box.accent_bar ? box.accent_bar_width * scale : 0.0f;
     const float line_h = font * 1.25f;
     const float spacing = nc.spacing * scale;
-    const float ceiling = std::max(80.0f, std::min(box.max_width * scale, viewport.width - 16.0f));
+    // Two different limits, because they answer two different questions.
+    //
+    // A toast that does not wrap is bounded only by the screen: "someone left a channel" is one
+    // short sentence and there is no reason to clip its ending when there is room beside it. A
+    // toast that wraps needs a width to wrap *at*, and that is what max_width is for. Applying
+    // the wrap width to both is what kept clipping these, and it did so from whatever value was
+    // saved in the profile, so raising the default alone would not have reached anyone.
+    const float screen_cap = std::max(80.0f, viewport.width - 16.0f);
+    const float wrap_cap = std::max(80.0f, std::min(box.max_width * scale, screen_cap));
 
     const MeasureFn measure = [](std::string_view t, float size) { return measure_text(t, size); };
 
@@ -590,6 +598,7 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
         }
         t.badge_w = t.badge.empty() ? 0.0f : measure_text(t.badge, font) + gap;
 
+        const float ceiling = notification.wrap ? wrap_cap : screen_cap;
         const float chrome = bar_w + pad_x * 2.0f + t.icon_w + t.prefix_w + t.badge_w;
         const float wanted = measure_text(notification.text, font);
         const float room = std::max(16.0f, ceiling - chrome);
@@ -629,7 +638,7 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
     // Placement is resolved once against the widest a toast may get. Every anchor puts its own
     // edge at a position that does not depend on the box width -- a right anchor pins the right
     // edge -- so this frame of reference stays correct though each toast is a different size.
-    const Rect area = resolve_placement(nc.placement, ceiling, stack_height, viewport);
+    const Rect area = resolve_placement(nc.placement, screen_cap, stack_height, viewport);
 
     float y = area.y;
     for (std::size_t index = 0; index < toasts_.size(); ++index) {

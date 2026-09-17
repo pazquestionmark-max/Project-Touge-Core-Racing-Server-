@@ -128,7 +128,8 @@ bool UserState::operator==(const UserState& o) const {
            priority_speaker == o.priority_speaker && is_talker == o.is_talker &&
            has_avatar == o.has_avatar && locally_muted == o.locally_muted &&
            is_friend == o.is_friend && is_blocked == o.is_blocked &&
-           friend_nickname == o.friend_nickname && talk_power == o.talk_power &&
+           friend_nickname == o.friend_nickname && contact_flag == o.contact_flag &&
+           talk_power == o.talk_power &&
            away_message == o.away_message && country == o.country;
 }
 
@@ -183,6 +184,7 @@ json::Value encode_user(const UserState& u) {
     put_opt(o, "is_friend", u.is_friend);
     put_opt(o, "is_blocked", u.is_blocked);
     put_str(o, "friend_nickname", u.friend_nickname);
+    put_opt_int(o, "contact_flag", u.contact_flag);
     put_opt_int(o, "talk_power", u.talk_power);
     put_str(o, "away_message", u.away_message);
     put_str(o, "country", u.country);
@@ -217,6 +219,7 @@ bool decode_user(const json::Value& v, UserState& out) {
     read_opt(v, "is_friend", out.is_friend);
     read_opt(v, "is_blocked", out.is_blocked);
     out.friend_nickname = v.get_string("friend_nickname");
+    read_opt_int(v, "contact_flag", out.contact_flag);
     read_opt_int(v, "talk_power", out.talk_power);
     out.away_message = v.get_string("away_message");
     out.country = v.get_string("country");

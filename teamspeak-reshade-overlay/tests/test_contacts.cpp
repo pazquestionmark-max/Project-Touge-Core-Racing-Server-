@@ -107,7 +107,7 @@ TEST(contacts, neutral_and_blocked_contacts_are_distinguished) {
 }
 
 TEST(contacts, a_row_without_an_identity_is_skipped) {
-    std::vector<sqlite::Row> rows = {{"key", "Nickname=Nobody\nFriend=0\n"}, {"key", ""}};
+    std::vector<sqlite::Row> rows = {{"key", "Nickname=Nobody\nFriend=2\n"}, {"key", ""}};
     CHECK(parse_contacts(rows).empty());
 }
 
@@ -123,10 +123,35 @@ TEST(contacts, the_column_carrying_the_blob_is_found_wherever_it_sits) {
 
 TEST(contacts, windows_line_endings_are_tolerated) {
     const std::vector<sqlite::Row> rows = {
-        {"1", "IDENTITY=crlf=\r\nNickname=Carl\r\nFriend=0\r\n"}};
+        {"1", "IDENTITY=crlf=\r\nNickname=Carl\r\nFriend=2\r\n"}};
     const std::vector<Contact> contacts = parse_contacts(rows);
     CHECK_EQ(contacts.size(), static_cast<std::size_t>(1));
     CHECK_EQ(contacts[0].unique_id, std::string("crlf="));
     CHECK_EQ(contacts[0].nickname, std::string("Carl"));
     CHECK(contacts[0].kind == ContactKind::Friend);
+}
+
+TEST(contacts, the_friend_value_matches_the_clients_own_ordering) {
+    // Pinned against what the TeamSpeak client actually stores, checked against its Contacts
+    // dialog: the three states are listed Neutral, Blocked, Friend, and stored 0, 1, 2. The
+    // first guess here was 0 for Friend, which made every real friend read as blocked and left
+    // the overlay with no friends at all.
+    const std::vector<sqlite::Row> rows = {
+        {"0", "IDENTITY=neutral=\nFriend=0\n"},
+        {"1", "IDENTITY=blocked=\nFriend=1\n"},
+        {"2", "IDENTITY=friend=\nFriend=2\n"},
+    };
+    const std::vector<Contact> contacts = parse_contacts(rows);
+    CHECK_EQ(contacts.size(), static_cast<std::size_t>(3));
+    CHECK(find(contacts, "neutral=")->kind == ContactKind::Neutral);
+    CHECK(find(contacts, "blocked=")->kind == ContactKind::Blocked);
+    CHECK(find(contacts, "friend=")->kind == ContactKind::Friend);
+}
+
+TEST(contacts, the_raw_value_is_carried_so_a_wrong_mapping_is_visible) {
+    const std::vector<sqlite::Row> rows = {{"0", "IDENTITY=a=\nFriend=2\n"},
+                                           {"1", "IDENTITY=b=\nNickname=NoFlag\n"}};
+    const std::vector<Contact> contacts = parse_contacts(rows);
+    CHECK_EQ(find(contacts, "a=")->raw_flag, 2);
+    CHECK_EQ(find(contacts, "b=")->raw_flag, -1);
 }

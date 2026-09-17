@@ -945,3 +945,18 @@ TEST(layout, an_explicit_per_user_colour_still_beats_the_friend_colour) {
 
     CHECK_EQ(resolve_user(u, cfg, 0.0f).name_color.to_hex(), std::string("#FF00FFFF"));
 }
+
+TEST(layout, the_configured_friend_value_decides_who_is_a_friend) {
+    // The raw contact value wins over the plugin's own classification, so a client that
+    // numbers its contact states differently is a setting change rather than a rebuild.
+    Config cfg = Config::defaults();
+    cfg.user_list.teamspeak_friend_value = 2;
+
+    UserState u = make_user("a=", "Alice");
+    u.is_friend = false;          // what the plugin concluded
+    u.contact_flag = 2;           // what the client actually stored
+    CHECK(resolve_user(u, cfg, 0.0f).is_friend);
+
+    cfg.user_list.teamspeak_friend_value = 0;
+    CHECK(!resolve_user(u, cfg, 0.0f).is_friend);
+}

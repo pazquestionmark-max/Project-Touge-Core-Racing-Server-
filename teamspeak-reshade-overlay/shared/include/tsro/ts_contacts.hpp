@@ -25,6 +25,8 @@ struct Contact {
     std::string unique_id;   ///< CLIENT_UNIQUE_IDENTIFIER, the same key used everywhere else
     std::string nickname;    ///< the name the user gave them in TeamSpeak, if any
     ContactKind kind = ContactKind::Neutral;
+    /// The `Friend=` value exactly as the client wrote it, or -1 when the entry had none.
+    int raw_flag = -1;
 };
 
 /// Parses the rows of the client's `Contacts` table.

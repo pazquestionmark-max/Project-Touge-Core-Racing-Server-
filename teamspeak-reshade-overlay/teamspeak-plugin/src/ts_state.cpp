@@ -248,11 +248,14 @@ void TsState::stamp_contact(UserState& user) const {
         user.is_friend = false;
         user.is_blocked = false;
         user.friend_nickname.clear();
+        user.contact_flag.reset();
         return;
     }
     user.is_friend = it->second.kind == ContactKind::Friend;
     user.is_blocked = it->second.kind == ContactKind::Blocked;
     user.friend_nickname = it->second.nickname;
+    if (it->second.raw_flag >= 0) user.contact_flag = it->second.raw_flag;
+    else user.contact_flag.reset();
 }
 
 void TsState::set_contacts(std::vector<Contact> contacts) {

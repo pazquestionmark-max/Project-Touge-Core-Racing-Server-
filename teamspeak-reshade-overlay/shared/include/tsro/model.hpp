@@ -87,6 +87,13 @@ struct UserState {
     std::optional<bool> is_blocked;
     /// The name the user gave them in TeamSpeak's Contacts dialog, if any.
     std::string friend_nickname;
+    /// The raw `Friend=` value from the client's contact list.
+    ///
+    /// Carried verbatim because which number means "friend" is the client's business, not ours,
+    /// and it is not in any documentation we can check. The overlay compares it against a
+    /// setting instead of hardcoding a guess, and the Diagnostics panel prints it, so a wrong
+    /// guess is a visible one-click fix rather than a silent absence of friends.
+    std::optional<int> contact_flag;
     std::optional<int> talk_power;
     std::string away_message;
     std::string country;

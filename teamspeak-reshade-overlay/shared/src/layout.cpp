@@ -219,7 +219,13 @@ ResolvedUser resolve_user(const UserState& u, const Config& cfg, float speaking_
     // client's settings and sends alongside everything else. Marking someone here is still
     // honoured -- it is an addition to that list, not a replacement for it, so a friend the
     // client does not know about can still be given a colour and a name.
-    const bool from_teamspeak = cfg.user_list.use_teamspeak_friends && u.is_friend.value_or(false);
+    // When the raw contact value is available, the configured value decides; the plugin's own
+    // classification is the fallback for a client that did not report one.
+    bool teamspeak_says_friend = u.is_friend.value_or(false);
+    if (u.contact_flag.has_value() && cfg.user_list.teamspeak_friend_value >= 0) {
+        teamspeak_says_friend = *u.contact_flag == cfg.user_list.teamspeak_friend_value;
+    }
+    const bool from_teamspeak = cfg.user_list.use_teamspeak_friends && teamspeak_says_friend;
     r.is_friend = from_teamspeak || (ov != nullptr && ov->is_friend);
 
     // The tag the user typed here wins over the one TeamSpeak has, because someone who set one

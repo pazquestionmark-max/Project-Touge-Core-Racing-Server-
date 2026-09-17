@@ -254,6 +254,15 @@ struct UserListConfig {
     /// Use the friend list from TeamSpeak's own Contacts, which the plugin reads out of the
     /// client's settings. Off falls back to whoever is marked a friend here, in Advanced.
     bool use_teamspeak_friends = true;
+    /// Which `Friend=` value in the client's contact list means "friend".
+    ///
+    /// 2, matching the order the client's own Contacts dialog lists the three states in:
+    /// Neutral, Blocked, Friend. It is a setting rather than a constant because the mapping is
+    /// documented nowhere checkable, and getting it wrong means no friends at all rather than
+    /// an obvious error. -1 falls back to the plugin's own classification. Diagnostics prints
+    /// the raw value per person, so correcting this is a one-click job if a client ever changes
+    /// the numbering.
+    int teamspeak_friend_value = 2;
     /// Colour applied to anyone marked as a friend, unless they have their own name colour.
     bool color_friends = true;
     Color friend_color{126, 231, 135, 255};
