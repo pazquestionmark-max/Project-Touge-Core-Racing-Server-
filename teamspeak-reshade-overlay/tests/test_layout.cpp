@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: MIT
+#include <algorithm>
+#include <cmath>
+
 #include "tsro/layout.hpp"
 #include "tsro_test.hpp"
 
@@ -512,4 +515,121 @@ TEST(layout, the_global_scale_multiplies_sizes) {
         compute_layout(s, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
     CHECK(large.users.rows[0].rect.h > small.users.rows[0].rect.h);
     CHECK(large.title.font_size > small.title.font_size);
+}
+
+// --- linked title + user list -----------------------------------------------------------------
+
+TEST(layout, a_linked_group_stacks_the_title_above_the_list) {
+    Config cfg = Config::defaults();
+    cfg.group.enabled = true;
+    cfg.group.anchor = Anchor::TopRight;
+    cfg.group.x = 16.0f;
+    cfg.group.y = 10.0f;
+
+    const OverlayState state = connected_state({make_user("a=", "Alice")});
+    const LayoutResult r =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+
+    CHECK(r.title.visible);
+    CHECK(r.users.visible);
+    // The list sits below the title, with the configured gap.
+    CHECK(r.users.rect.y >= r.title.rect.bottom() - 0.01f);
+    CHECK_NEAR(r.users.rect.y - r.title.rect.bottom(), cfg.group.spacing * cfg.general.scale, 0.5f);
+    // The whole block honours the group anchor, not the elements' own placements.
+    CHECK_NEAR(1920.0f - std::max(r.title.rect.right(), r.users.rect.right()), 16.0f, 0.01f);
+    CHECK_NEAR(r.title.rect.y, 10.0f, 0.01f);
+}
+
+TEST(layout, moving_the_group_moves_both_blocks_together) {
+    Config cfg = Config::defaults();
+    cfg.group.enabled = true;
+    const OverlayState state = connected_state({make_user("a=", "Alice")});
+
+    const LayoutResult before =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+    cfg.group.x += 100.0f;
+    cfg.group.y += 40.0f;
+    const LayoutResult after =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+
+    // Anchored top-right, so a larger x offset moves left by exactly that much.
+    CHECK_NEAR(before.title.rect.x - after.title.rect.x, 100.0f, 0.01f);
+    CHECK_NEAR(before.users.rect.x - after.users.rect.x, 100.0f, 0.01f);
+    CHECK_NEAR(after.title.rect.y - before.title.rect.y, 40.0f, 0.01f);
+    CHECK_NEAR(after.users.rect.y - before.users.rect.y, 40.0f, 0.01f);
+}
+
+TEST(layout, the_group_scale_resizes_both_blocks) {
+    Config cfg = Config::defaults();
+    cfg.group.enabled = true;
+    const OverlayState state = connected_state({make_user("a=", "Alice")});
+
+    const LayoutResult small =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+    cfg.group.scale = 2.0f;
+    const LayoutResult large =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+
+    CHECK(large.title.font_size > small.title.font_size);
+    CHECK(large.users.rows[0].rect.h > small.users.rows[0].rect.h);
+}
+
+TEST(layout, each_block_can_be_scaled_on_its_own) {
+    Config cfg = Config::defaults();
+    cfg.group.enabled = true;
+    const OverlayState state = connected_state({make_user("a=", "Alice")});
+    const LayoutResult base =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+
+    // Growing only the title must leave the rows alone, and vice versa.
+    cfg.channel_title.scale = 2.0f;
+    const LayoutResult bigger_title =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+    CHECK(bigger_title.title.font_size > base.title.font_size);
+    CHECK_NEAR(bigger_title.users.rows[0].rect.h, base.users.rows[0].rect.h, 0.01f);
+
+    cfg.channel_title.scale = 1.0f;
+    cfg.user_list.scale = 2.0f;
+    const LayoutResult bigger_list =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+    CHECK_NEAR(bigger_list.title.font_size, base.title.font_size, 0.01f);
+    CHECK(bigger_list.users.rows[0].rect.h > base.users.rows[0].rect.h);
+}
+
+TEST(layout, unlinking_the_group_restores_independent_placement) {
+    Config cfg = Config::defaults();
+    cfg.group.enabled = false;
+    cfg.channel_title.placement.anchor = Anchor::TopLeft;
+    cfg.channel_title.placement.x = 30.0f;
+    cfg.channel_title.placement.y = 20.0f;
+    cfg.user_list.placement.anchor = Anchor::BottomRight;
+    cfg.user_list.placement.x = 40.0f;
+    cfg.user_list.placement.y = 50.0f;
+
+    const OverlayState state = connected_state({make_user("a=", "Alice")});
+    const LayoutResult r =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+
+    CHECK_NEAR(r.title.rect.x, 30.0f, 0.01f);
+    CHECK_NEAR(r.title.rect.y, 20.0f, 0.01f);
+    CHECK_NEAR(1920.0f - r.users.rect.right(), 40.0f, 0.01f);
+    CHECK_NEAR(1080.0f - r.users.rect.bottom(), 50.0f, 0.01f);
+}
+
+TEST(layout, a_linked_group_stays_anchored_at_every_resolution) {
+    Config cfg = Config::defaults();
+    cfg.group.enabled = true;
+    cfg.group.anchor = Anchor::TopRight;
+    cfg.group.x = 16.0f;
+    cfg.group.y = 10.0f;
+    const OverlayState state =
+        connected_state({make_user("a=", "Alice"), make_user("b=", "Bob")});
+
+    for (const Viewport vp : {Viewport{1280, 720}, Viewport{1920, 1080}, Viewport{2560, 1440},
+                              Viewport{3440, 1440}, Viewport{3840, 2160}}) {
+        const LayoutResult r = compute_layout(state, cfg, vp, stub_measure(), 0.0f, nullptr);
+        CHECK_NEAR(vp.width - std::max(r.title.rect.right(), r.users.rect.right()), 16.0f, 0.01f);
+        CHECK_NEAR(r.title.rect.y, 10.0f, 0.01f);
+        CHECK(r.users.rect.y > r.title.rect.y);
+    }
 }

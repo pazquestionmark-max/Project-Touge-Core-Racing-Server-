@@ -184,6 +184,8 @@ struct AppearanceConfig {
 
 struct ChannelTitleConfig {
     Placement placement{true, Anchor::TopLeft, 24.0f, 24.0f, false, Align::Left};
+    /// Multiplies this block only, on top of the global and group scales.
+    float scale = 1.0f;
     bool show_parent = true;
     bool show_user_count = true;
     bool show_server_name = false;
@@ -204,6 +206,8 @@ struct ChannelTitleConfig {
 
 struct UserListConfig {
     Placement placement{true, Anchor::TopLeft, 24.0f, 54.0f, false, Align::Left};
+    /// Multiplies this block only, on top of the global and group scales.
+    float scale = 1.0f;
     bool show_local_user = true;
     bool highlight_local_user = true;
     Color local_user_color{255, 214, 102, 255};
@@ -280,6 +284,25 @@ struct ChatConfig {
     Color background{16, 18, 22, 150};
     bool show_background = true;
     bool use_sender_color = true;   ///< colour the sender using their per-user override
+};
+
+/// Binds the channel title and the user list into a single block.
+///
+/// With `enabled`, the two stack vertically and are placed, moved and scaled as one -- which is
+/// what a corner roster wants, and what makes "move both together" a single control instead of
+/// two that must be kept in step by hand. Turn it off and each falls back to its own placement,
+/// so they can be put anywhere independently. Per-element `scale` works either way.
+struct GroupConfig {
+    bool enabled = true;
+    Anchor anchor = Anchor::TopRight;
+    float x = 16.0f;
+    float y = 10.0f;
+    bool percent = false;
+    Align align = Align::Right;
+    /// Scales the whole block. Per-element scales multiply on top of this.
+    float scale = 1.0f;
+    /// Gap between the title and the first row, in unscaled pixels.
+    float spacing = 4.0f;
 };
 
 struct IndicatorsConfig {
@@ -389,6 +412,7 @@ struct Config {
     int config_version = kConfigVersion;
     GeneralConfig general;
     AppearanceConfig appearance;
+    GroupConfig group;
     ChannelTitleConfig channel_title;
     UserListConfig user_list;
     IndicatorsConfig indicators;

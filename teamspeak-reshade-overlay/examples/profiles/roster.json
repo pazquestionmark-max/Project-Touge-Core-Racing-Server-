@@ -25,8 +25,18 @@
     "text_shadow_color": "#000000C8",
     "text_default": "#FFFFFFFF"
   },
+  "group": {
+    "enabled": true,
+    "anchor": "top_right",
+    "x": 14,
+    "y": 8,
+    "align": "right",
+    "scale": 1.0,
+    "spacing": 3
+  },
   "channel_title": {
-    "placement": { "visible": true, "anchor": "top_right", "x": 16, "y": 10, "align": "right" },
+    "scale": 1.0,
+    "placement": { "visible": true, "anchor": "top_right", "x": 14, "y": 8, "align": "right" },
     "show_parent": false,
     "show_user_count": false,
     "show_server_name": false,
@@ -37,7 +47,8 @@
     "text": "#FFFFFFFF"
   },
   "user_list": {
-    "placement": { "visible": true, "anchor": "top_right", "x": 16, "y": 34, "align": "right" },
+    "scale": 1.0,
+    "placement": { "visible": true, "anchor": "top_right", "x": 14, "y": 30, "align": "right" },
     "show_local_user": true,
     "highlight_local_user": false,
     "show_muted_users": true,

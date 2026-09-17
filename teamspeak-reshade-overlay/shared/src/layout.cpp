@@ -399,7 +399,13 @@ LayoutResult compute_layout(const OverlayState& state, const Config& cfg, const 
     out.viewport = vp;
     out.scale = cfg.general.scale;
 
-    const float s = cfg.general.scale;
+    // Three scales multiply: the global one, the group's (when the blocks are linked) and the
+    // element's own. That is what lets "resize everything" and "resize just this" both be a
+    // single control instead of one fighting the other.
+    const float group_s = cfg.group.enabled ? cfg.group.scale : 1.0f;
+    const float title_s = cfg.general.scale * group_s * cfg.channel_title.scale;
+    const float s = cfg.general.scale * group_s * cfg.user_list.scale;
+
     const float font = cfg.appearance.font_size * s;
     const float pad_x = cfg.appearance.padding_x * s;
     const float pad_y = cfg.appearance.padding_y * s;
@@ -439,10 +445,16 @@ LayoutResult compute_layout(const OverlayState& state, const Config& cfg, const 
             if (tc.show_topic && !state.channel.topic.empty()) text += " - " + state.channel.topic;
         }
 
-        const float title_font = font * tc.font_scale * (co && co->font_scale ? *co->font_scale : 1.0f);
+        const float title_font = cfg.appearance.font_size * title_s * tc.font_scale *
+                                 (co && co->font_scale ? *co->font_scale : 1.0f);
+        const float title_pad_x = cfg.appearance.padding_x * title_s;
+        const float title_pad_y = cfg.appearance.padding_y * title_s;
+        const float title_icon = cfg.appearance.icon_size * title_s;
+        const float title_gap = cfg.user_list.indicator_gap * title_s;
         const float text_w = measure ? measure(text, title_font) : 0.0f;
-        const float w = text_w + pad_x * 2.0f + (tc.icon != IconShape::None ? icon + gap : 0.0f);
-        const float h = title_font + pad_y * 2.0f;
+        const float w = text_w + title_pad_x * 2.0f +
+                        (tc.icon != IconShape::None ? title_icon + title_gap : 0.0f);
+        const float h = title_font + title_pad_y * 2.0f;
 
         out.title.visible = true;
         out.title.rect = resolve_placement(tc.placement, w, h, vp);
@@ -510,6 +522,51 @@ LayoutResult compute_layout(const OverlayState& state, const Config& cfg, const 
         for (auto& row : out.users.rows) {
             row.rect = Rect{out.users.rect.x + pad_x, y, out.users.rect.w - pad_x * 2.0f, row_h};
             y += row_h + row_gap;
+        }
+    }
+
+    // --- group: stack the title above the list and place the pair as one block ---
+    if (cfg.group.enabled && (out.title.visible || out.users.visible)) {
+        Placement group_placement;
+        group_placement.visible = true;
+        group_placement.anchor = cfg.group.anchor;
+        group_placement.x = cfg.group.x;
+        group_placement.y = cfg.group.y;
+        group_placement.percent = cfg.group.percent;
+        group_placement.align = cfg.group.align;
+
+        const float spacing = cfg.group.spacing * cfg.general.scale * group_s;
+        const float title_h = out.title.visible ? out.title.rect.h : 0.0f;
+        const float list_h = out.users.visible ? out.users.rect.h : 0.0f;
+        const float gap_h = (out.title.visible && out.users.visible) ? spacing : 0.0f;
+        const float block_w = std::max(out.title.visible ? out.title.rect.w : 0.0f,
+                                       out.users.visible ? out.users.rect.w : 0.0f);
+        const float block_h = title_h + gap_h + list_h;
+
+        const Rect block = resolve_placement(group_placement, block_w, block_h, vp);
+
+        // Each block keeps its own width but is aligned inside the group box, so a short title
+        // over a wide list stays flush with whichever edge the group is anchored to.
+        const auto align_in_block = [&](float w) {
+            return block.x + align_offset(cfg.group.align, block_w, w);
+        };
+
+        float y = block.y;
+        if (out.title.visible) {
+            out.title.rect.x = align_in_block(out.title.rect.w);
+            out.title.rect.y = y;
+            y += out.title.rect.h + gap_h;
+        }
+        if (out.users.visible) {
+            const float dx = align_in_block(out.users.rect.w) - out.users.rect.x;
+            const float dy = y - out.users.rect.y;
+            out.users.rect.x += dx;
+            out.users.rect.y += dy;
+            // Rows were positioned relative to the old rect; move them with it.
+            for (UserRowLayout& row : out.users.rows) {
+                row.rect.x += dx;
+                row.rect.y += dy;
+            }
         }
     }
 

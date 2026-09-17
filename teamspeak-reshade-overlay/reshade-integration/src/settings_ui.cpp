@@ -314,36 +314,18 @@ void SettingsUi::tab_appearance(Config& config, SettingsActions& actions) {
 
     ImGui::SeparatorText("Text");
 
-    // Font selection. ReShade owns the atlas, so the choice is among the fonts it loaded rather
-    // than an arbitrary file; the note below says where to add more.
-    const ImGuiIO& io = ImGui::GetIO();
-    const int font_count = io.Fonts != nullptr ? io.Fonts->Fonts.Size : 0;
-    if (font_count > 1) {
-        std::string label = "Default";
-        if (a.font_index > 0 && a.font_index < font_count) {
-            ImFont* current = io.Fonts->Fonts[a.font_index];
-            label = current != nullptr ? current->GetDebugName() : "Default";
-        }
-        if (ImGui::BeginCombo("Font", label.c_str())) {
-            for (int i = 0; i < font_count; ++i) {
-                ImFont* font = io.Fonts->Fonts[i];
-                const char* name = (i == 0) ? "Default" : (font ? font->GetDebugName() : "?");
-                const bool selected = (a.font_index == i);
-                if (ImGui::Selectable(name, selected)) {
-                    a.font_index = i;
-                    actions.config_changed = true;
-                }
-                if (selected) ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
-    } else {
-        ImGui::TextDisabled("Font: using ReShade's font (only one is loaded)");
-    }
+    // No font list here, deliberately. Enumerating ReShade's atlas means reading ImFontAtlas
+    // fields at offsets from this build's imgui.h, and ImFontAtlas is not in ReShade's function
+    // table -- the layouts need not match, and assuming they did crashed the game. The typeface
+    // comes from ReShade's own setting instead, which is safe and needs no guessing.
     ImGui::TextWrapped(
-        "The list is the fonts ReShade has loaded. ReShade owns the font atlas, so the overlay "
-        "draws with one of those rather than loading its own. To add a typeface, set it in "
-        "ReShade's own Settings tab and it will appear here.");
+        "Typeface: whatever ReShade is set to use. Open ReShade's own Settings tab and point its "
+        "font option at a .ttf -- the release ships Roboto and a few others in the 'fonts' "
+        "folder next to this add-on. The overlay follows that choice automatically.");
+    ImGui::TextDisabled(
+        "The overlay cannot load a typeface independently: ReShade owns the font atlas and "
+        "rebuilds it, and reaching into it from an add-on is not safe across ReShade versions.");
+    ImGui::Spacing();
 
     actions.config_changed |= ImGui::SliderFloat("Size", &a.font_size, 6.0f, 72.0f, "%.0f px");
     actions.config_changed |= colour_edit("Text colour", a.text_default);
@@ -380,27 +362,57 @@ void SettingsUi::tab_appearance(Config& config, SettingsActions& actions) {
 }
 
 void SettingsUi::tab_layout(Config& config, SettingsActions& actions) {
-    ImGui::TextDisabled(
-        "Each element is positioned independently. Anchors keep an element attached to the same "
-        "corner or edge at any resolution.");
+    const bool advanced = config.general.advanced_settings;
+
+    ImGui::SeparatorText("Channel title and user list");
+    actions.config_changed |=
+        ImGui::Checkbox("Keep them together as one block", &config.group.enabled);
+    help("On: the title sits directly above the list and the pair moves and scales as one. "
+         "Off: each is positioned and anchored on its own.");
+
+    if (config.group.enabled) {
+        GroupConfig& g = config.group;
+        actions.config_changed |= enum_combo("Corner", g.anchor, kAnchors);
+        actions.config_changed |= ImGui::DragFloat("Move across", &g.x, 1.0f, -8192.0f, 8192.0f, "%.0f px");
+        actions.config_changed |= ImGui::DragFloat("Move down", &g.y, 1.0f, -8192.0f, 8192.0f, "%.0f px");
+        actions.config_changed |= enum_combo("Align", g.align, kAligns);
+        actions.config_changed |= ImGui::SliderFloat("Size (both)", &g.scale, 0.25f, 3.0f, "x%.2f");
+        help("Resizes the title and the list together. The two sliders below adjust each one "
+             "relative to this.");
+        actions.config_changed |= ImGui::SliderFloat("Gap between them", &g.spacing, 0.0f, 80.0f, "%.0f px");
+
+        ImGui::Spacing();
+        actions.config_changed |=
+            ImGui::SliderFloat("Title size only", &config.channel_title.scale, 0.25f, 3.0f, "x%.2f");
+        actions.config_changed |=
+            ImGui::SliderFloat("List size only", &config.user_list.scale, 0.25f, 3.0f, "x%.2f");
+        ImGui::TextDisabled("Both are multiplied by Size (both) and by the overall scale.");
+    } else {
+        actions.config_changed |= placement_editor("Channel title position", config.channel_title.placement);
+        actions.config_changed |=
+            ImGui::SliderFloat("Title size", &config.channel_title.scale, 0.25f, 3.0f, "x%.2f");
+        actions.config_changed |= placement_editor("User list position", config.user_list.placement);
+        actions.config_changed |=
+            ImGui::SliderFloat("List size", &config.user_list.scale, 0.25f, 3.0f, "x%.2f");
+    }
 
     ImGui::SeparatorText("Channel title");
-    actions.config_changed |= placement_editor("Channel title position", config.channel_title.placement);
     ChannelTitleConfig& t = config.channel_title;
+    actions.config_changed |= ImGui::Checkbox("Show the channel title", &t.placement.visible);
     actions.config_changed |= ImGui::Checkbox("Show the parent channel", &t.show_parent);
     actions.config_changed |= ImGui::Checkbox("Show the user count", &t.show_user_count);
-    actions.config_changed |= ImGui::Checkbox("Show the server name", &t.show_server_name);
-    actions.config_changed |= ImGui::Checkbox("Show the channel topic", &t.show_topic);
-    actions.config_changed |= ImGui::SliderFloat("Title size", &t.font_scale, 0.4f, 3.0f, "x%.2f");
-    actions.config_changed |= ImGui::SliderFloat("Title opacity", &t.opacity, 0.0f, 1.0f);
     actions.config_changed |= colour_edit("Title colour", t.text);
-    actions.config_changed |= ImGui::Checkbox("Title background", &t.show_background);
-    if (t.show_background) actions.config_changed |= colour_edit("Title background colour", t.background);
-    actions.config_changed |= ImGui::Checkbox("Title border", &t.show_border);
-    if (t.show_border) actions.config_changed |= colour_edit("Title border colour", t.border);
-    actions.config_changed |= enum_combo("Title icon", t.icon, kIcons);
-    actions.config_changed |= colour_edit("Title icon colour", t.icon_color);
-    {
+    actions.config_changed |= ImGui::SliderFloat("Title weight", &t.font_scale, 0.4f, 3.0f, "x%.2f");
+    if (advanced) {
+        actions.config_changed |= ImGui::Checkbox("Show the server name", &t.show_server_name);
+        actions.config_changed |= ImGui::Checkbox("Show the channel topic", &t.show_topic);
+        actions.config_changed |= ImGui::SliderFloat("Title opacity", &t.opacity, 0.0f, 1.0f);
+        actions.config_changed |= ImGui::Checkbox("Title background", &t.show_background);
+        if (t.show_background) actions.config_changed |= colour_edit("Title background colour", t.background);
+        actions.config_changed |= ImGui::Checkbox("Title border", &t.show_border);
+        if (t.show_border) actions.config_changed |= colour_edit("Title border colour", t.border);
+        actions.config_changed |= enum_combo("Title icon", t.icon, kIcons);
+        actions.config_changed |= colour_edit("Title icon colour", t.icon_color);
         char buffer[201];
         std::snprintf(buffer, sizeof(buffer), "%s", t.format.c_str());
         if (ImGui::InputText("Format", buffer, sizeof(buffer))) {
@@ -423,26 +435,27 @@ void SettingsUi::tab_layout(Config& config, SettingsActions& actions) {
 
     ImGui::SeparatorText("User list");
     UserListConfig& u = config.user_list;
-    actions.config_changed |= placement_editor("User list position", u.placement);
+    actions.config_changed |= ImGui::Checkbox("Show the user list", &u.placement.visible);
     actions.config_changed |= ImGui::Checkbox("Show yourself", &u.show_local_user);
-    actions.config_changed |= ImGui::Checkbox("Highlight yourself", &u.highlight_local_user);
-    if (u.highlight_local_user) actions.config_changed |= colour_edit("Your colour", u.local_user_color);
     actions.config_changed |= ImGui::Checkbox("Show muted users", &u.show_muted_users);
     actions.config_changed |= ImGui::Checkbox("Move speakers to the top", &u.speaking_first);
     actions.config_changed |= enum_combo("Sort by", u.sort, kSorts);
-    actions.config_changed |= enum_combo("Long names", u.name_overflow, kOverflow);
-    help("How a name that does not fit is handled: cut off, ellipsis, wrapped onto more lines, "
-         "shrunk to fit, or scrolled.");
+    actions.config_changed |= ImGui::SliderInt("Maximum users shown", &u.max_visible_users, 1, 64);
     actions.config_changed |=
         ImGui::SliderFloat("Name width", &u.max_name_width, 40.0f, 800.0f, "%.0f px");
-    if (u.name_overflow == OverflowMode::Shrink) {
+    actions.config_changed |= enum_combo("Long names", u.name_overflow, kOverflow);
+    help("How a name that does not fit is handled: cut off, ellipsis, wrapped, shrunk, or scrolled.");
+    if (advanced) {
+        actions.config_changed |= ImGui::Checkbox("Highlight yourself", &u.highlight_local_user);
+        if (u.highlight_local_user) actions.config_changed |= colour_edit("Your colour", u.local_user_color);
+        if (u.name_overflow == OverflowMode::Shrink) {
+            actions.config_changed |=
+                ImGui::SliderFloat("Smallest size", &u.min_font_scale, 0.3f, 1.0f, "x%.2f");
+        }
+        actions.config_changed |= ImGui::Checkbox("Show a '+N more' line", &u.show_overflow_count);
         actions.config_changed |=
-            ImGui::SliderFloat("Smallest size", &u.min_font_scale, 0.3f, 1.0f, "x%.2f");
+            ImGui::SliderFloat("Gap around icons", &u.indicator_gap, 0.0f, 32.0f, "%.0f px");
     }
-    actions.config_changed |= ImGui::SliderInt("Maximum users shown", &u.max_visible_users, 1, 64);
-    actions.config_changed |= ImGui::Checkbox("Show a '+N more' line", &u.show_overflow_count);
-    actions.config_changed |=
-        ImGui::SliderFloat("Gap around icons", &u.indicator_gap, 0.0f, 32.0f, "%.0f px");
 
     ImGui::SeparatorText("Notifications");
     actions.config_changed |= placement_editor("Notification position", config.notifications.placement);

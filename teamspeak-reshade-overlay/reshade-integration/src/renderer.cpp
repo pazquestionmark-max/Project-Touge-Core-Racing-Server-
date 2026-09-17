@@ -21,27 +21,18 @@ std::uint32_t packed(const Color& color, float opacity) {
     return color.with_alpha_scale(opacity).to_abgr();
 }
 
-/// The font the HUD draws with, for this frame.
+/// The font the HUD draws with.
 ///
-/// ReShade owns the ImGui font atlas and rebuilds it, so an add-on cannot load a typeface of its
-/// own without fighting it for the atlas. What it *can* do is draw with any font ReShade has
-/// already loaded, which is what `font_index` selects. Set once per frame before any measuring
-/// or drawing: the whole render path runs on one thread inside ReShade's ImGui frame, so a
-/// file-local is safe and saves threading the config through every measure callback.
-ImFont* g_frame_font = nullptr;
-
-ImFont* overlay_font() { return g_frame_font != nullptr ? g_frame_font : ImGui::GetFont(); }
-
-/// Resolves font_index against ReShade's atlas, falling back to the default when the index is
-/// stale -- ReShade's font list can differ between installs and versions.
-ImFont* resolve_font(const Config& config) {
-    const ImGuiIO& io = ImGui::GetIO();
-    const int index = config.appearance.font_index;
-    if (io.Fonts != nullptr && index > 0 && index < io.Fonts->Fonts.Size) {
-        if (ImFont* font = io.Fonts->Fonts[index]) return font;
-    }
-    return ImGui::GetFont();
-}
+/// ReShade owns the Dear ImGui font atlas, and -- importantly -- ImFontAtlas is NOT part of the
+/// function table ReShade exports. Reading io.Fonts->Fonts from an add-on therefore dereferences
+/// struct offsets taken from *this* build's imgui.h against memory laid out by ReShade's own
+/// ImGui build. When those differ it is a wild pointer read, which is exactly what crashed the
+/// game when the font list was opened. The function table exists precisely because the layouts
+/// cannot be assumed to match, so the only safe handle is the one ReShade hands back.
+///
+/// The typeface therefore follows ReShade's own font setting. docs/configuration.md explains how
+/// to point ReShade at the Roboto (and other) .ttf files shipped in the `fonts` folder.
+ImFont* overlay_font() { return ImGui::GetFont(); }
 
 float measure_text(std::string_view text, float font_size) {
     ImFont* font = overlay_font();
@@ -584,7 +575,6 @@ void Renderer::draw(ImDrawList* dl, const Config& config, const OverlayFrame& fr
 
     const auto start = std::chrono::steady_clock::now();
     ++stats_.frames;
-    g_frame_font = resolve_font(config);
 
     const OverlayState& state = preview != nullptr ? *preview : frame.state;
     const std::vector<ChatMessage>& chat =

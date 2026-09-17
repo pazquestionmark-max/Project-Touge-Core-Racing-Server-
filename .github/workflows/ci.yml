@@ -85,10 +85,11 @@ jobs:
       - name: Stage the distribution
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist/plugin, dist/addon, dist/profiles | Out-Null
+          New-Item -ItemType Directory -Force -Path dist/plugin, dist/addon, dist/profiles, dist/fonts | Out-Null
           Copy-Item build/teamspeak-plugin/Release/*.dll dist/plugin/
           Copy-Item build/reshade-integration/Release/*.addon64 dist/addon/
           Copy-Item teamspeak-reshade-overlay/examples/profiles/*.json dist/profiles/
+          Copy-Item teamspeak-reshade-overlay/assets/fonts/* dist/fonts/
           Copy-Item teamspeak-reshade-overlay/docs/installation.md, teamspeak-reshade-overlay/docs/troubleshooting.md, teamspeak-reshade-overlay/LICENSE dist/
       - uses: actions/upload-artifact@v4
         with:

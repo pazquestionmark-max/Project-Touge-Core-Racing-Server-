@@ -90,7 +90,42 @@ this version — see [compatibility](compatibility.md).
 | `text_default` / `text_secondary` / `accent` | colour | — |
 
 **Leave `text_shadow` on.** It is the difference between readable and not over bright game
-content. Font *family* follows ReShade's own setting; only the size is ours to change.
+content.
+
+### Changing the typeface
+
+The overlay draws with whatever font **ReShade** is set to use; it cannot load one itself.
+ReShade owns the Dear ImGui font atlas and rebuilds it, and that atlas is not part of the
+function table add-ons are given — reading it from the add-on crashed the game in an earlier
+build, so the capability was removed rather than patched around.
+
+To use Roboto (or any other typeface):
+
+1. Copy the `fonts` folder from the release next to the game's ReShade DLL.
+2. In game, **Home** → ReShade's **Settings** tab → point its font option at
+   `fonts\Roboto-Medium.ttf`.
+3. The overlay follows immediately. Nothing to set on the overlay side.
+
+This changes ReShade's own UI font too, which is inherent to the approach.
+
+## `group` — the title and user list as one block
+
+| Key | Range | Default | |
+|---|---|---|---|
+| `enabled` | bool | `true` | Stack the title above the list and treat the pair as one block |
+| `anchor` | anchor | `top_right` | Which corner the block sits in |
+| `x`, `y` | ±16384 | `16`, `10` | Offset from that corner |
+| `percent` | bool | `false` | Treat the offsets as viewport fractions |
+| `align` | align | `right` | How the two blocks line up with each other |
+| `scale` | 0.25–4 | `1.0` | Resizes **both** blocks |
+| `spacing` | 0–200 | `4` | Gap between the title and the first row |
+
+Three scales multiply: `general.scale` (everything), `group.scale` (both blocks) and each
+block's own `channel_title.scale` / `user_list.scale`. So "make it all bigger" and "make just
+the title bigger" are separate controls that do not fight each other.
+
+With `enabled` off, `channel_title.placement` and `user_list.placement` take over and the two
+can be placed anywhere independently. Per-block `scale` still applies.
 
 ## `channel_title`
 

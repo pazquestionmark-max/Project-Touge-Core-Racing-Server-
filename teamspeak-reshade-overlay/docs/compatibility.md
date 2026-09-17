@@ -59,7 +59,7 @@ indicator rather than rendering a confident wrong answer.
 
 | Limitation | Why | Workaround |
 |---|---|---|
-| Font *family* follows ReShade's setting | ReShade owns the ImGui font atlas and rebuilds it; an add-on that pushed its own would fight it. | Font *size* is fully configurable. Change the family in ReShade's own settings. |
+| Font *family* follows ReShade's setting | ReShade owns the ImGui font atlas, and `ImFontAtlas` is **not** in the function table ReShade exports. Reading it from an add-on dereferences struct offsets from the add-on's own imgui.h against memory laid out by ReShade's ImGui build; when those differ it is a wild pointer read. A build that enumerated the atlas to offer a font list crashed the game, and the feature was removed rather than made conditional. | Point ReShade's own font setting at a `.ttf`. The release ships Roboto, Cousine, Karla and DroidSans in `fonts/` for exactly this. Font *size* is configurable in the overlay as normal. |
 | No user-supplied image icons | Indicators are vector-drawn, which avoids texture lifetimes across device resets and ships no third-party artwork. | 18 built-in shapes, each freely colourable, per state and per user. The `icon_image` key is reserved so a later version can add this without a schema break. |
 | One TeamSpeak connection at a time | The overlay follows the tab you are actually on. | Switching tabs in TeamSpeak switches the overlay. |
 | Drag-and-drop positioning is numeric, not mouse-dragged | The HUD takes no input by design, so it cannot be dragged directly. | The Layout tab has anchors, pixel and percentage offsets, and a live preview that updates as you type. |

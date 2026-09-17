@@ -331,7 +331,7 @@ void read(const R& r, ChannelOverride& c) {
 }
 
 constexpr const char* kKnownSections[] = {
-    "config_version", "general",  "appearance", "channel_title",     "user_list",
+    "config_version", "general",  "appearance", "group", "channel_title",     "user_list",
     "indicators",     "notifications", "chat",  "animation",         "integration",
     "logging",        "user_overrides", "channel_overrides",
 };
@@ -386,9 +386,23 @@ json::Value Config::to_json() const {
         root.set("appearance", std::move(o));
     }
     {
+        const GroupConfig& g = group;
+        json::Value o{json::Object{}};
+        o.set("enabled", json::Value(g.enabled));
+        o.set("anchor", json::Value(to_string(g.anchor)));
+        o.set("x", json::Value(g.x));
+        o.set("y", json::Value(g.y));
+        o.set("percent", json::Value(g.percent));
+        o.set("align", json::Value(to_string(g.align)));
+        o.set("scale", json::Value(g.scale));
+        o.set("spacing", json::Value(g.spacing));
+        root.set("group", std::move(o));
+    }
+    {
         const ChannelTitleConfig& c = channel_title;
         json::Value o{json::Object{}};
         o.set("placement", write(c.placement));
+        o.set("scale", json::Value(c.scale));
         o.set("show_parent", json::Value(c.show_parent));
         o.set("show_user_count", json::Value(c.show_user_count));
         o.set("show_server_name", json::Value(c.show_server_name));
@@ -411,6 +425,7 @@ json::Value Config::to_json() const {
         const UserListConfig& u = user_list;
         json::Value o{json::Object{}};
         o.set("placement", write(u.placement));
+        o.set("scale", json::Value(u.scale));
         o.set("show_local_user", json::Value(u.show_local_user));
         o.set("highlight_local_user", json::Value(u.highlight_local_user));
         o.set("local_user_color", json::Value(u.local_user_color.to_hex()));
@@ -589,9 +604,22 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         a.col("accent", x.accent);
     }
     {
+        const R g = r.sub("group");
+        GroupConfig& x = c.group;
+        g.b("enabled", x.enabled);
+        g.en("anchor", x.anchor);
+        g.f("x", x.x, -16384.0f, 16384.0f);
+        g.f("y", x.y, -16384.0f, 16384.0f);
+        g.b("percent", x.percent);
+        g.en("align", x.align);
+        g.f("scale", x.scale, 0.25f, 4.0f);
+        g.f("spacing", x.spacing, 0.0f, 200.0f);
+    }
+    {
         const R t = r.sub("channel_title");
         ChannelTitleConfig& x = c.channel_title;
         read(t.sub("placement"), x.placement);
+        t.f("scale", x.scale, 0.25f, 4.0f);
         t.b("show_parent", x.show_parent);
         t.b("show_user_count", x.show_user_count);
         t.b("show_server_name", x.show_server_name);
@@ -613,6 +641,7 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         const R u = r.sub("user_list");
         UserListConfig& x = c.user_list;
         read(u.sub("placement"), x.placement);
+        u.f("scale", x.scale, 0.25f, 4.0f);
         u.b("show_local_user", x.show_local_user);
         u.b("highlight_local_user", x.highlight_local_user);
         u.col("local_user_color", x.local_user_color);

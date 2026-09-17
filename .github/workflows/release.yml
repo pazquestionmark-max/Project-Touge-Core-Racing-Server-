@@ -55,11 +55,12 @@ jobs:
         shell: pwsh
         run: |
           $stage = "stage-${{ matrix.arch }}"
-          New-Item -ItemType Directory -Force -Path "$stage/plugin","$stage/addon","$stage/profiles","$stage/tools" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$stage/plugin","$stage/addon","$stage/profiles","$stage/tools","$stage/fonts" | Out-Null
           Copy-Item "build-${{ matrix.arch }}/teamspeak-plugin/Release/*.dll" "$stage/plugin/"
           Copy-Item "build-${{ matrix.arch }}/reshade-integration/Release/TeamSpeakOverlay.addon*" "$stage/addon/"
           Copy-Item "build-${{ matrix.arch }}/tools/config-tool/Release/tsro-config.exe" "$stage/tools/"
           Copy-Item "teamspeak-reshade-overlay/examples/profiles/*.json" "$stage/profiles/"
+          Copy-Item "teamspeak-reshade-overlay/assets/fonts/*" "$stage/fonts/"
           Copy-Item "teamspeak-reshade-overlay/LICENSE" "$stage/"
           Copy-Item "teamspeak-reshade-overlay/docs/installation.md","teamspeak-reshade-overlay/docs/uninstallation.md","teamspeak-reshade-overlay/docs/troubleshooting.md","teamspeak-reshade-overlay/docs/compatibility.md" "$stage/"
           Get-ChildItem -Recurse $stage | Select-Object FullName, Length
