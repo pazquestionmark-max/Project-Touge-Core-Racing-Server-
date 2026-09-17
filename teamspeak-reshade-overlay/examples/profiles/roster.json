@@ -1,0 +1,100 @@
+{
+  "config_version": 1,
+  "_comment": [
+    "Roster: a plain right-aligned list in the top-right corner, in the style of an in-game",
+    "unit roster. No panel, no box around whoever is speaking, tight line spacing, drop shadow",
+    "so it stays readable over bright scenery. Speaking is shown by colouring the name only.",
+    "Channel Commander is a small orange dot immediately before the name."
+  ],
+  "general": {
+    "profile_name": "roster",
+    "master_opacity": 1.0,
+    "scale": 1.0,
+    "advanced_settings": false
+  },
+  "appearance": {
+    "font_size": 15,
+    "icon_size": 8,
+    "row_height": 17,
+    "row_spacing": 0,
+    "padding_x": 0,
+    "padding_y": 0,
+    "show_panel_background": false,
+    "text_shadow": true,
+    "text_shadow_offset": 1,
+    "text_shadow_color": "#000000C8",
+    "text_default": "#FFFFFFFF"
+  },
+  "channel_title": {
+    "placement": { "visible": true, "anchor": "top_right", "x": 16, "y": 10, "align": "right" },
+    "show_parent": false,
+    "show_user_count": false,
+    "show_server_name": false,
+    "show_background": false,
+    "show_border": false,
+    "icon": "none",
+    "font_scale": 1.15,
+    "text": "#FFFFFFFF"
+  },
+  "user_list": {
+    "placement": { "visible": true, "anchor": "top_right", "x": 16, "y": 34, "align": "right" },
+    "show_local_user": true,
+    "highlight_local_user": false,
+    "show_muted_users": true,
+    "speaking_first": false,
+    "sort": "alphabetical",
+    "name_overflow": "ellipsis",
+    "max_name_width": 300,
+    "max_visible_users": 16,
+    "show_overflow_count": true,
+    "indicator_gap": 4
+  },
+  "indicators": {
+    "speaking": {
+      "enabled": true, "show_icon": false, "icon": "none",
+      "override_text_color": true, "text_color": "#7EE787FF",
+      "show_border": false, "glow": false, "show_background": false, "dim_entry": false
+    },
+    "commander": {
+      "enabled": true, "show_icon": true, "icon": "circle", "icon_scale": 0.62,
+      "icon_color": "#FF952BFF", "override_text_color": false
+    },
+    "mic_muted": {
+      "enabled": true, "icon": "microphone_muted", "icon_scale": 0.8,
+      "icon_color": "#F06868FF", "override_text_color": true, "text_color": "#A4A8B0FF",
+      "dim_entry": false, "show_border": false, "glow": false
+    },
+    "speaker_muted": {
+      "enabled": true, "icon": "speaker_muted", "icon_scale": 0.8,
+      "icon_color": "#C17AFFFF", "override_text_color": true, "text_color": "#968CA8FF",
+      "dim_entry": false, "show_border": false, "glow": false
+    },
+    "away": { "enabled": true, "icon": "moon", "icon_scale": 0.8, "dim_entry": false },
+    "recording": { "enabled": true, "icon": "record", "icon_scale": 0.8 },
+    "whispering": { "enabled": true, "show_border": false, "glow": false },
+    "priority_speaker": { "enabled": false },
+    "suppressed": { "enabled": false },
+    "locally_muted": { "enabled": false },
+    "mic_hardware_off": { "enabled": false }
+  },
+  "notifications": {
+    "placement": { "visible": true, "anchor": "bottom_right", "x": 16, "y": 16, "align": "right" },
+    "max_visible": 5,
+    "stack": "up",
+    "width": 300,
+    "spacing": 4,
+    "join": { "enabled": true, "format": "{name} joined {channel}", "prefix": "+" },
+    "leave": { "enabled": true, "format": "{name} left {channel}", "prefix": "-" },
+    "channel_switch": { "enabled": true },
+    "connection": { "enabled": true },
+    "whisper": { "enabled": false },
+    "chat": { "enabled": false }
+  },
+  "chat": { "placement": { "visible": false } },
+  "animation": {
+    "enabled": true,
+    "speaking": "color_fade",
+    "speaking_attack_ms": 60,
+    "speaking_release_ms": 200
+  }
+}

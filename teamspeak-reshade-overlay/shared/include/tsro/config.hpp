@@ -150,20 +150,30 @@ struct GeneralConfig {
     float scale = 1.0f;
     std::string profile_name = "default";
     bool auto_profile_by_executable = true;
+    /// Show every setting. Off by default: the common ones fit on two tabs, and burying them in
+    /// two hundred others helps nobody.
+    bool advanced_settings = false;
 };
 
 struct AppearanceConfig {
-    float font_size = 16.0f;
-    float icon_size = 12.0f;
-    float row_height = 22.0f;
-    float row_spacing = 2.0f;
-    float padding_x = 10.0f;
-    float padding_y = 8.0f;
-    float corner_radius = 4.0f;
-    Color panel_background{16, 18, 22, 170};
-    Color panel_border{255, 255, 255, 30};
+    /// Which of ReShade's loaded fonts to draw with. ReShade owns the ImGui font atlas, so the
+    /// add-on cannot load a typeface of its own without fighting it for the atlas. What it can
+    /// do is pick among the fonts ReShade itself loaded, which is what this indexes. The
+    /// Appearance tab lists them by name and says where to add more.
+    int font_index = 0;
+    float font_size = 15.0f;
+    float icon_size = 8.0f;
+    // Rows sized to the text rather than padded out: 1.15x the font is a normal line height.
+    float row_height = 17.0f;
+    float row_spacing = 0.0f;
+    float padding_x = 0.0f;
+    float padding_y = 0.0f;
+    float corner_radius = 3.0f;
+    Color panel_background{16, 18, 22, 150};
+    Color panel_border{255, 255, 255, 26};
     float panel_border_thickness = 1.0f;
-    bool show_panel_background = true;
+    // Off by default: a translucent slab behind the names is more intrusive than the names are.
+    bool show_panel_background = false;
     bool text_shadow = true;          ///< keeps text legible over bright game content
     Color text_shadow_color{0, 0, 0, 190};
     float text_shadow_offset = 1.0f;
@@ -206,7 +216,7 @@ struct UserListConfig {
     int max_visible_users = 24;
     bool show_overflow_count = true;
     bool show_avatar_initial = false; ///< see docs/protocol.md §6: avatar images are unavailable
-    float indicator_gap = 6.0f;
+    float indicator_gap = 4.0f;
 };
 
 struct NotificationStyle {

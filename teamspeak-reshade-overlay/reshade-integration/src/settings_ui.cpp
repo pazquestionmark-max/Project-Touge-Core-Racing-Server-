@@ -192,6 +192,30 @@ bool state_style_editor(const char* label, StateStyle& style, const char* note) 
     return changed;
 }
 
+/// Simple mode: enable/disable, colour, icon. Everything else stays at its default and is
+/// reachable by turning on "Show every setting".
+bool compact_state_editor(const char* label, StateStyle& style, bool show_icon_picker) {
+    bool changed = false;
+    ImGui::PushID(label);
+    changed |= ImGui::Checkbox("##on", &style.enabled);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 9.0f);
+    if (style.override_text_color) {
+        changed |= colour_edit("##colour", style.text_color);
+    } else {
+        changed |= colour_edit("##colour", style.icon_color);
+    }
+    ImGui::SameLine();
+    if (show_icon_picker) {
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 8.0f);
+        changed |= enum_combo("##icon", style.icon, kIcons);
+        ImGui::SameLine();
+    }
+    ImGui::TextUnformatted(label);
+    ImGui::PopID();
+    return changed;
+}
+
 bool notification_editor(const char* label, NotificationStyle& style, const char* placeholders) {
     bool changed = false;
     ImGui::PushID(label);
@@ -271,40 +295,88 @@ void SettingsUi::tab_general(Config& config, SettingsActions& actions) {
     ImGui::Checkbox("Show the overlay using example data", &preview_active_);
     help("Draws the HUD from fixed sample users so you can see every indicator at once. It does "
          "not create TeamSpeak events and does not change your real state.");
+
+    ImGui::SeparatorText("Settings");
+    if (ImGui::Checkbox("Show every setting", &config.general.advanced_settings)) {
+        actions.config_changed = true;
+    }
+    help("Off by default. The everyday settings fit on a few tabs; turning this on reveals "
+         "per-state styling, animation tuning, per-channel themes and connection internals.");
+    if (!config.general.advanced_settings) {
+        ImGui::TextDisabled("Advanced tabs are hidden. Nothing is lost -- your saved settings "
+                            "are untouched whether they are shown or not.");
+    }
 }
 
 void SettingsUi::tab_appearance(Config& config, SettingsActions& actions) {
     AppearanceConfig& a = config.appearance;
+    const bool advanced = config.general.advanced_settings;
+
     ImGui::SeparatorText("Text");
-    actions.config_changed |= ImGui::SliderFloat("Font size", &a.font_size, 6.0f, 72.0f, "%.0f px");
-    ImGui::TextDisabled(
-        "The font family follows ReShade's own font setting: ReShade owns the font atlas and an "
-        "add-on cannot replace it without breaking on every rebuild.");
-    actions.config_changed |= colour_edit("Default text", a.text_default);
+
+    // Font selection. ReShade owns the atlas, so the choice is among the fonts it loaded rather
+    // than an arbitrary file; the note below says where to add more.
+    const ImGuiIO& io = ImGui::GetIO();
+    const int font_count = io.Fonts != nullptr ? io.Fonts->Fonts.Size : 0;
+    if (font_count > 1) {
+        std::string label = "Default";
+        if (a.font_index > 0 && a.font_index < font_count) {
+            ImFont* current = io.Fonts->Fonts[a.font_index];
+            label = current != nullptr ? current->GetDebugName() : "Default";
+        }
+        if (ImGui::BeginCombo("Font", label.c_str())) {
+            for (int i = 0; i < font_count; ++i) {
+                ImFont* font = io.Fonts->Fonts[i];
+                const char* name = (i == 0) ? "Default" : (font ? font->GetDebugName() : "?");
+                const bool selected = (a.font_index == i);
+                if (ImGui::Selectable(name, selected)) {
+                    a.font_index = i;
+                    actions.config_changed = true;
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+    } else {
+        ImGui::TextDisabled("Font: using ReShade's font (only one is loaded)");
+    }
+    ImGui::TextWrapped(
+        "The list is the fonts ReShade has loaded. ReShade owns the font atlas, so the overlay "
+        "draws with one of those rather than loading its own. To add a typeface, set it in "
+        "ReShade's own Settings tab and it will appear here.");
+
+    actions.config_changed |= ImGui::SliderFloat("Size", &a.font_size, 6.0f, 72.0f, "%.0f px");
+    actions.config_changed |= colour_edit("Text colour", a.text_default);
+    actions.config_changed |= ImGui::Checkbox("Drop shadow", &a.text_shadow);
+    help("Keeps light text readable over bright game content. Strongly recommended.");
+
+    ImGui::SeparatorText("Spacing");
+    actions.config_changed |= ImGui::SliderFloat("Line height", &a.row_height, 8.0f, 60.0f, "%.0f px");
+    actions.config_changed |= ImGui::SliderFloat("Gap between lines", &a.row_spacing, 0.0f, 24.0f, "%.0f px");
+    actions.config_changed |= ImGui::SliderFloat("Icon size", &a.icon_size, 4.0f, 32.0f, "%.0f px");
+
+    ImGui::SeparatorText("Background panel");
+    actions.config_changed |= ImGui::Checkbox("Draw a panel behind the overlay", &a.show_panel_background);
+    if (a.show_panel_background) {
+        actions.config_changed |= colour_edit("Panel colour", a.panel_background);
+        actions.config_changed |= ImGui::SliderFloat("Padding across", &a.padding_x, 0.0f, 40.0f, "%.0f px");
+        actions.config_changed |= ImGui::SliderFloat("Padding down", &a.padding_y, 0.0f, 40.0f, "%.0f px");
+        actions.config_changed |= ImGui::SliderFloat("Corner radius", &a.corner_radius, 0.0f, 24.0f);
+    }
+
+    if (!advanced) return;
+
+    ImGui::SeparatorText("Advanced");
     actions.config_changed |= colour_edit("Secondary text", a.text_secondary);
     actions.config_changed |= colour_edit("Accent", a.accent);
-    actions.config_changed |= ImGui::Checkbox("Text shadow", &a.text_shadow);
-    help("Keeps light text readable over bright game content. Strongly recommended.");
     if (a.text_shadow) {
         actions.config_changed |= colour_edit("Shadow colour", a.text_shadow_color);
         actions.config_changed |=
             ImGui::SliderFloat("Shadow offset", &a.text_shadow_offset, 0.0f, 6.0f, "%.1f px");
     }
-
-    ImGui::SeparatorText("Panel");
-    actions.config_changed |= ImGui::Checkbox("Panel background", &a.show_panel_background);
-    actions.config_changed |= colour_edit("Panel colour", a.panel_background);
     actions.config_changed |= colour_edit("Panel border", a.panel_border);
     actions.config_changed |=
         ImGui::SliderFloat("Border thickness", &a.panel_border_thickness, 0.0f, 8.0f);
-    actions.config_changed |= ImGui::SliderFloat("Corner radius", &a.corner_radius, 0.0f, 24.0f);
-
-    ImGui::SeparatorText("Spacing");
-    actions.config_changed |= ImGui::SliderFloat("Icon size", &a.icon_size, 4.0f, 48.0f, "%.0f px");
-    actions.config_changed |= ImGui::SliderFloat("Row height", &a.row_height, 8.0f, 96.0f, "%.0f px");
-    actions.config_changed |= ImGui::SliderFloat("Row spacing", &a.row_spacing, 0.0f, 32.0f, "%.0f px");
-    actions.config_changed |= ImGui::SliderFloat("Padding X", &a.padding_x, 0.0f, 64.0f, "%.0f px");
-    actions.config_changed |= ImGui::SliderFloat("Padding Y", &a.padding_y, 0.0f, 64.0f, "%.0f px");
 }
 
 void SettingsUi::tab_layout(Config& config, SettingsActions& actions) {
@@ -571,6 +643,25 @@ void SettingsUi::tab_channels(Config& config, const OverlayFrame& frame,
 
 void SettingsUi::tab_indicators(Config& config, SettingsActions& actions) {
     IndicatorsConfig& i = config.indicators;
+
+    if (!config.general.advanced_settings) {
+        ImGui::TextDisabled("On / colour / icon for each state. Turn on \"Show every setting\" "
+                            "in General for borders, glow, dimming and backgrounds.");
+        ImGui::Spacing();
+        actions.config_changed |= compact_state_editor("Speaking", i.speaking, false);
+        actions.config_changed |= compact_state_editor("Whispering to you", i.whispering, true);
+        actions.config_changed |= compact_state_editor("Microphone muted", i.mic_muted, true);
+        actions.config_changed |= compact_state_editor("Speakers muted", i.speaker_muted, true);
+        actions.config_changed |= compact_state_editor("Channel Commander", i.commander, true);
+        actions.config_changed |= compact_state_editor("Away", i.away, true);
+        actions.config_changed |= compact_state_editor("Recording", i.recording, true);
+        ImGui::Spacing();
+        ImGui::TextWrapped(
+            "Microphone mute and speaker mute are separate states. Give them different icons and "
+            "colours or you will not be able to tell them apart at a glance.");
+        return;
+    }
+
     ImGui::TextDisabled("Each state has its own independent appearance.");
 
     ImGui::SeparatorText("Voice");
@@ -599,7 +690,7 @@ void SettingsUi::tab_indicators(Config& config, SettingsActions& actions) {
     actions.config_changed |= state_style_editor("Recording", i.recording, nullptr);
     actions.config_changed |= state_style_editor(
         "Channel Commander", i.commander,
-        "Shown immediately before the name. The default is an orange circle; both the colour "
+        "Shown immediately before the name. The default is a small orange dot; both the colour "
         "and the shape can be changed here, and per user on the Users tab.");
     actions.config_changed |= state_style_editor("Priority speaker", i.priority_speaker, nullptr);
     actions.config_changed |= state_style_editor(
@@ -988,6 +1079,7 @@ SettingsActions SettingsUi::draw(Config& config, const LinkDiagnostics& diagnost
                                  const FrameStats& stats,
                                  const ConfigDiagnostics& config_diagnostics) {
     SettingsActions actions;
+    const bool advanced = config.general.advanced_settings;
 
     if (ImGui::BeginTabBar("tsro_tabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
         if (ImGui::BeginTabItem("General")) {
@@ -1006,7 +1098,7 @@ SettingsActions SettingsUi::draw(Config& config, const LinkDiagnostics& diagnost
             tab_users(config, frame, actions);
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Channels")) {
+        if (advanced && ImGui::BeginTabItem("Channels")) {
             tab_channels(config, frame, actions);
             ImGui::EndTabItem();
         }
@@ -1022,11 +1114,11 @@ SettingsActions SettingsUi::draw(Config& config, const LinkDiagnostics& diagnost
             tab_chat(config, actions);
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Animation")) {
+        if (advanced && ImGui::BeginTabItem("Animation")) {
             tab_animation(config, actions);
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Integration")) {
+        if (advanced && ImGui::BeginTabItem("Integration")) {
             tab_integration(config, actions);
             ImGui::EndTabItem();
         }

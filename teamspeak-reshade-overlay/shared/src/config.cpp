@@ -359,11 +359,13 @@ json::Value Config::to_json() const {
         o.set("scale", json::Value(general.scale));
         o.set("profile_name", json::Value(general.profile_name));
         o.set("auto_profile_by_executable", json::Value(general.auto_profile_by_executable));
+        o.set("advanced_settings", json::Value(general.advanced_settings));
         root.set("general", std::move(o));
     }
     {
         const AppearanceConfig& a = appearance;
         json::Value o{json::Object{}};
+        o.set("font_index", json::Value(a.font_index));
         o.set("font_size", json::Value(a.font_size));
         o.set("icon_size", json::Value(a.icon_size));
         o.set("row_height", json::Value(a.row_height));
@@ -562,10 +564,12 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         g.f("scale", c.general.scale, 0.25f, 4.0f);
         g.s("profile_name", c.general.profile_name, 64);
         g.b("auto_profile_by_executable", c.general.auto_profile_by_executable);
+        g.b("advanced_settings", c.general.advanced_settings);
     }
     {
         const R a = r.sub("appearance");
         AppearanceConfig& x = c.appearance;
+        a.i("font_index", x.font_index, 0, 32);
         a.f("font_size", x.font_size, 6.0f, 96.0f);
         a.f("icon_size", x.icon_size, 2.0f, 96.0f);
         a.f("row_height", x.row_height, 6.0f, 160.0f);

@@ -21,10 +21,27 @@ std::uint32_t packed(const Color& color, float opacity) {
     return color.with_alpha_scale(opacity).to_abgr();
 }
 
-/// ReShade owns the ImGui font atlas, so the add-on renders with ReShade's font and varies only
-/// the pixel size. Font *family* therefore follows ReShade's own setting — a documented
-/// limitation (docs/architecture.md §1.2), not an oversight.
-ImFont* overlay_font() { return ImGui::GetFont(); }
+/// The font the HUD draws with, for this frame.
+///
+/// ReShade owns the ImGui font atlas and rebuilds it, so an add-on cannot load a typeface of its
+/// own without fighting it for the atlas. What it *can* do is draw with any font ReShade has
+/// already loaded, which is what `font_index` selects. Set once per frame before any measuring
+/// or drawing: the whole render path runs on one thread inside ReShade's ImGui frame, so a
+/// file-local is safe and saves threading the config through every measure callback.
+ImFont* g_frame_font = nullptr;
+
+ImFont* overlay_font() { return g_frame_font != nullptr ? g_frame_font : ImGui::GetFont(); }
+
+/// Resolves font_index against ReShade's atlas, falling back to the default when the index is
+/// stale -- ReShade's font list can differ between installs and versions.
+ImFont* resolve_font(const Config& config) {
+    const ImGuiIO& io = ImGui::GetIO();
+    const int index = config.appearance.font_index;
+    if (io.Fonts != nullptr && index > 0 && index < io.Fonts->Fonts.Size) {
+        if (ImFont* font = io.Fonts->Fonts[index]) return font;
+    }
+    return ImGui::GetFont();
+}
 
 float measure_text(std::string_view text, float font_size) {
     ImFont* font = overlay_font();
@@ -236,6 +253,13 @@ void Renderer::draw_title(ImDrawList* dl, const Config& config, const LayoutResu
     }
 
     float x = title.rect.x + pad_x;
+    if (config.channel_title.placement.align == Align::Right) {
+        x = title.rect.right() - pad_x - measure_text(title.text, title.font_size) -
+            (title.icon != IconShape::None
+                 ? config.appearance.icon_size * config.general.scale +
+                       config.user_list.indicator_gap * config.general.scale
+                 : 0.0f);
+    }
     const float centre_y = title.rect.y + title.rect.h * 0.5f;
     if (title.icon != IconShape::None) {
         const float icon = config.appearance.icon_size * config.general.scale;
@@ -299,7 +323,27 @@ void Renderer::draw_users(ImDrawList* dl, const Config& config, const LayoutResu
         }
 
         const float centre_y = row.rect.y + row.rect.h * 0.5f;
+
+        // Right-aligned lists put the whole row flush against the right edge: dot, then name,
+        // ending where the panel does. Measuring the row first is what lets the leading icons
+        // stay attached to the name instead of floating at a fixed left margin.
         float x = row.rect.x;
+        if (config.user_list.placement.align == Align::Right) {
+            float content = row.name.width;
+            for (const ResolvedUser::Indicator& indicator : resolved.leading) {
+                content += icon * indicator.scale + gap;
+            }
+            for (const ResolvedUser::Indicator& indicator : resolved.trailing) {
+                content += icon * indicator.scale + gap;
+            }
+            x = row.rect.right() - content;
+        } else if (config.user_list.placement.align == Align::Center) {
+            float content = row.name.width;
+            for (const ResolvedUser::Indicator& indicator : resolved.leading) {
+                content += icon * indicator.scale + gap;
+            }
+            x = row.rect.x + (row.rect.w - content) * 0.5f;
+        }
 
         // Leading indicators: Channel Commander sits immediately before the name, as specified.
         for (const ResolvedUser::Indicator& indicator : resolved.leading) {
@@ -540,6 +584,7 @@ void Renderer::draw(ImDrawList* dl, const Config& config, const OverlayFrame& fr
 
     const auto start = std::chrono::steady_clock::now();
     ++stats_.frames;
+    g_frame_font = resolve_font(config);
 
     const OverlayState& state = preview != nullptr ? *preview : frame.state;
     const std::vector<ChatMessage>& chat =

@@ -17,17 +17,18 @@ constexpr Color kWhisperCyan{86, 214, 214, 255};
 constexpr Color kSuppressedGrey{120, 126, 136, 255};
 
 StateStyle speaking_style() {
+    // Speaking is shown by colouring the name, nothing more. A box that appears and disappears
+    // around a row is the single most distracting thing an overlay can do in a game, and it also
+    // makes the list jump. Border and glow remain available in Advanced for anyone who wants
+    // them; they are simply not the default.
     StateStyle s;
-    s.icon = IconShape::Bars;
+    s.icon = IconShape::None;
+    s.show_icon = false;
     s.icon_color = kSpeakingGreen;
     s.override_text_color = true;
     s.text_color = kSpeakingGreen;
-    s.show_border = true;
-    s.border = Color{126, 231, 135, 140};
-    s.border_thickness = 1.5f;
-    s.glow = true;
-    s.glow_color = Color{126, 231, 135, 70};
-    s.glow_radius = 7.0f;
+    s.show_border = false;
+    s.glow = false;
     return s;
 }
 
@@ -37,10 +38,8 @@ StateStyle whisper_style() {
     s.icon_color = kWhisperCyan;
     s.override_text_color = true;
     s.text_color = kWhisperCyan;
-    s.show_border = true;
-    s.border = Color{86, 214, 214, 150};
-    s.glow = true;
-    s.glow_color = Color{86, 214, 214, 70};
+    s.show_border = false;
+    s.glow = false;
     return s;
 }
 
@@ -99,10 +98,10 @@ StateStyle recording_style() {
 
 StateStyle commander_style() {
     StateStyle s;
-    // The brief's default: an orange circular indicator immediately before the name.
+    // An orange circular indicator immediately before the name.
     s.icon = IconShape::Circle;
     s.icon_color = kCommanderOrange;
-    s.icon_scale = 1.0f;
+    s.icon_scale = 0.62f;  // a dot beside the name, not a bullet competing with it
     s.override_text_color = true;
     s.text_color = Color{255, 197, 132, 255};
     return s;
