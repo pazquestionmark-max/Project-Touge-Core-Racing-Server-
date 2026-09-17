@@ -91,11 +91,14 @@ std::string module_directory() {
 /// Loads the configured typeface if it is not already loaded. Cheap to call every frame.
 void apply_font(AddonState& state) {
     const tsro::AppearanceConfig& a = state.config.appearance;
+    // Weight is applied every time: it is cheap when unchanged and rebakes when it is not.
+    state.fonts.set_weight(a.font_weight);
     if (a.font_file == state.applied_font_file && a.font_face_index == state.applied_font_face) {
         return;
     }
     state.applied_font_file = a.font_file;
     state.applied_font_face = a.font_face_index;
+    state.fonts.set_weight(a.font_weight);
     if (!state.fonts.select(a.font_file, a.font_face_index)) {
         TSRO_WARN(kComponent, "font: " + state.fonts.error());
     }

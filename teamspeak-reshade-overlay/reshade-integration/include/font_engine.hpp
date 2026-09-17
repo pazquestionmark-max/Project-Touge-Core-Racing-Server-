@@ -59,6 +59,10 @@ public:
     /// Loads a face. An empty file name returns the overlay to ReShade's font.
     /// Returns false and sets error() when the file cannot be used.
     bool select(const std::string& file, int face_index);
+    /// Stroke weight on the 100-900 scale. Anything above 400 is emboldened when glyphs are
+    /// rasterised, which is what gives a 700 from a face that ships a single weight. Changing it
+    /// rebakes, so it is cheap to call every frame with the same value.
+    void set_weight(int weight);
     const std::string& selected_file() const noexcept;
     int selected_face_index() const noexcept;
 

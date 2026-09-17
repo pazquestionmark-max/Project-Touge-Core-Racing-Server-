@@ -1294,6 +1294,20 @@ void SettingsUi::section_typography(Config& config, SettingsActions& actions) {
             }
             ImGui::EndCombo();
         }
+        constexpr int kWeights[] = {300, 400, 500, 600, 700, 800, 900};
+        int weight_index = 1;
+        for (int i = 0; i < 7; ++i) {
+            if (kWeights[i] == a.font_weight) weight_index = i;
+        }
+        if (ImGui::Combo("Weight", &weight_index, "Light (300)\0Regular (400)\0Medium (500)\0"
+                                                  "Semibold (600)\0Bold (700)\0Extrabold (800)\0"
+                                                  "Black (900)\0")) {
+            a.font_weight = kWeights[weight_index];
+            actions.config_changed = true;
+        }
+        help("Anything above Regular is emboldened as the glyphs are rasterised, so a face that "
+             "ships one weight still gives a convincing bold.");
+
         if (ImGui::Button("Rescan fonts folder")) fonts_->rescan();
         ImGui::SameLine();
         ImGui::TextDisabled("%d found", static_cast<int>(files.size()));

@@ -173,9 +173,13 @@ struct AppearanceConfig {
     /// first time this was attempted. Loading the .ttf here touches none of ReShade's ImGui
     /// state -- it produces a texture of our own and draws glyph quads from it -- so the font
     /// applies to the overlay alone and leaves ReShade's own UI untouched.
-    std::string font_file;
+    std::string font_file = "Roboto-Medium.ttf";
     /// Face index inside a .ttc collection. 0 for an ordinary .ttf/.otf.
     int font_face_index = 0;
+    /// Stroke weight, on the usual 100-900 scale. 400 is the face as drawn; anything heavier is
+    /// emboldened when the glyphs are rasterised, which is how a 700 is had from a face that
+    /// ships only one weight. A face that is already bold simply starts heavier.
+    int font_weight = 700;
     /// Retained only so an older profile still loads; superseded by font_file.
     int font_index = 0;
     float font_size = 15.0f;

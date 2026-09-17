@@ -387,6 +387,7 @@ json::Value Config::to_json() const {
         json::Value o{json::Object{}};
         o.set("font_file", json::Value(a.font_file));
         o.set("font_face_index", json::Value(a.font_face_index));
+        o.set("font_weight", json::Value(a.font_weight));
         o.set("font_index", json::Value(a.font_index));
         o.set("font_size", json::Value(a.font_size));
         o.set("icon_size", json::Value(a.icon_size));
@@ -639,6 +640,7 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         AppearanceConfig& x = c.appearance;
         a.s("font_file", x.font_file, 260);
         a.i("font_face_index", x.font_face_index, 0, 64);
+        a.i("font_weight", x.font_weight, 100, 900);
         a.i("font_index", x.font_index, 0, 32);
         a.f("font_size", x.font_size, 6.0f, 96.0f);
         a.f("icon_size", x.icon_size, 2.0f, 96.0f);

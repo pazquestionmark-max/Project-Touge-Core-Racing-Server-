@@ -153,6 +153,7 @@ struct FontEngine::Impl {
     std::vector<unsigned char> font_data;
     stbtt_fontinfo info{};
     bool face_loaded = false;
+    int weight = 400;
     std::string error;
 
     reshade::api::device* device = nullptr;
@@ -303,10 +304,45 @@ struct FontEngine::Impl {
             r.h = y1 - y0;
             r.ox = x0;
             r.oy = y0;
+            // Emboldening widens the glyph, so the box has to grow with it before rasterising.
+            // A stroke of roughly 4% of the pixel size per 100 units of weight matches what a
+            // designed bold does closely enough to be indistinguishable at HUD sizes.
+            const int grow = embolden_pixels(a.px);
             if (r.w > 0 && r.h > 0 && r.w < kMaxAtlasDim && r.h < kMaxAtlasDim) {
                 r.bitmap.resize(static_cast<std::size_t>(r.w) * static_cast<std::size_t>(r.h));
                 stbtt_MakeCodepointBitmap(&info, r.bitmap.data(), r.w, r.h, r.w, scale, scale,
                                           static_cast<int>(cp));
+                if (grow > 0) {
+                    // Dilate: every pixel takes the strongest coverage within `grow` to its left
+                    // and above, which thickens the stroke without softening its edge.
+                    const int w2 = r.w + grow;
+                    const int h2 = r.h + grow;
+                    std::vector<unsigned char> thick(static_cast<std::size_t>(w2) *
+                                                     static_cast<std::size_t>(h2), 0u);
+                    for (int y = 0; y < h2; ++y) {
+                        for (int x = 0; x < w2; ++x) {
+                            unsigned char best = 0;
+                            for (int dy = 0; dy <= grow; ++dy) {
+                                const int sy = y - dy;
+                                if (sy < 0 || sy >= r.h) continue;
+                                for (int dx = 0; dx <= grow; ++dx) {
+                                    const int sx = x - dx;
+                                    if (sx < 0 || sx >= r.w) continue;
+                                    best = std::max(best,
+                                                    r.bitmap[static_cast<std::size_t>(sy) *
+                                                                 static_cast<std::size_t>(r.w) +
+                                                             static_cast<std::size_t>(sx)]);
+                                }
+                            }
+                            thick[static_cast<std::size_t>(y) * static_cast<std::size_t>(w2) +
+                                  static_cast<std::size_t>(x)] = best;
+                        }
+                    }
+                    r.bitmap = std::move(thick);
+                    r.w = w2;
+                    r.h = h2;
+                    r.advance += static_cast<float>(grow);
+                }
             } else {
                 r.w = 0;
                 r.h = 0;
@@ -436,6 +472,14 @@ struct FontEngine::Impl {
         return true;
     }
 
+    /// How many pixels of stroke the configured weight adds at this size.
+    int embolden_pixels(int px) const {
+        if (weight <= 400) return 0;
+        const float extra = static_cast<float>(weight - 400) / 100.0f * 0.04f *
+                            static_cast<float>(px);
+        return std::clamp(static_cast<int>(std::lround(extra)), 0, 6);
+    }
+
     int key_for(float px) const {
         return std::clamp(static_cast<int>(std::lround(px)), kMinPx, kMaxPx);
     }
@@ -542,6 +586,13 @@ void FontEngine::begin_frame(reshade::api::device* device) {
     }
 }
 
+void FontEngine::set_weight(int weight) {
+    const int clamped = std::clamp(weight, 100, 900);
+    if (clamped == impl_->weight) return;
+    impl_->weight = clamped;
+    impl_->unload_textures();   // every baked size is the wrong weight now
+}
+
 void FontEngine::release() { impl_->unload_textures(); }
 
 bool FontEngine::ready_at(float px) { return impl_->live_atlas(px) != nullptr; }
@@ -598,10 +649,15 @@ void FontEngine::draw(ImDrawList* dl, float x, float y, float px, std::uint32_t 
     if (atlas == nullptr) return;
 
     const float scale = px / static_cast<float>(atlas->px);
-    const float baseline = y + atlas->ascent * scale;
+    // Snap the origin to whole pixels. A glyph baked for this exact size and then drawn at a
+    // fractional offset is resampled across two columns of pixels, which softens one edge and
+    // hardens the other -- the difference between crisp text and text that looks slightly
+    // chewed, and the reason an outline drawn from several offsets looked ragged.
+    const float origin = std::floor(x + 0.5f);
+    const float baseline = std::floor(y + atlas->ascent * scale + 0.5f);
 
     dl->PushTextureID(static_cast<ImTextureID>(atlas->texture_handle));
-    float pen = x;
+    float pen = origin;
     for (std::size_t i = 0; i < text.size();) {
         const std::uint32_t cp = next_codepoint(text, i);
         auto it = atlas->glyphs.find(cp);
@@ -615,9 +671,12 @@ void FontEngine::draw(ImDrawList* dl, float x, float y, float px, std::uint32_t 
         }
         const Impl::Glyph& g = it->second;
         if (!g.blank) {
+            // Whole-pixel quads, so each glyph lands on the texel grid it was baked against.
+            const float gx = std::floor(pen + g.x0 * scale + 0.5f);
+            const float gy = std::floor(baseline + g.y0 * scale + 0.5f);
             dl->PrimReserve(6, 4);
-            dl->PrimRectUV(ImVec2(pen + g.x0 * scale, baseline + g.y0 * scale),
-                           ImVec2(pen + g.x1 * scale, baseline + g.y1 * scale),
+            dl->PrimRectUV(ImVec2(gx, gy),
+                           ImVec2(gx + (g.x1 - g.x0) * scale, gy + (g.y1 - g.y0) * scale),
                            ImVec2(g.u0, g.v0), ImVec2(g.u1, g.v1), color);
         }
         pen += g.advance * scale;

@@ -381,15 +381,21 @@ void Renderer::draw_text(ImDrawList* dl, const Config& config, float x, float y,
         }
     };
 
-    // An outline is eight extra draws, so it is opt-in -- but unlike a one-sided shadow it stays
-    // readable over *any* background rather than most of them.
+    // The outline is drawn as copies of the glyphs around a circle.
+    //
+    // It used to be eight copies at the corners and edges of a square, which is why it looked
+    // uneven: the diagonal copies sit 1.41 times further out than the straight ones, so the
+    // corners were thin and the sides were thick. Sampling a circle instead puts every copy the
+    // same distance from the glyph, and the count rises with the thickness so a thick outline
+    // does not show the gaps between its samples.
     if (config.appearance.text_outline && config.appearance.text_outline_thickness > 0.0f) {
         const float t = config.appearance.text_outline_thickness;
         const std::uint32_t outline = config.appearance.text_outline_color.to_abgr();
-        static constexpr float kOffsets[8][2] = {{-1, -1}, {0, -1}, {1, -1}, {-1, 0},
-                                                 {1, 0},   {-1, 1}, {0, 1},  {1, 1}};
-        for (const auto& o : kOffsets) {
-            emit(x + o[0] * t, y + o[1] * t, outline);
+        const int samples = std::clamp(static_cast<int>(std::lround(t * 8.0f)), 8, 24);
+        for (int i = 0; i < samples; ++i) {
+            const float angle = 6.28318530718f * static_cast<float>(i) /
+                                static_cast<float>(samples);
+            emit(x + std::cos(angle) * t, y + std::sin(angle) * t, outline);
         }
     } else if (config.appearance.text_shadow) {
         // A one-pixel drop shadow is what keeps light text readable over bright game content,

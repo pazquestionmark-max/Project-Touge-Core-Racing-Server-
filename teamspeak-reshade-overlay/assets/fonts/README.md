@@ -1,27 +1,34 @@
 # Fonts
 
-These are shipped so you have something to point ReShade at. The overlay draws with **whatever
-font ReShade is configured to use** — it cannot load a typeface by itself, because ReShade owns
-the Dear ImGui font atlas and rebuilds it, and reaching into that atlas from an add-on is not
-safe across ReShade versions. (An earlier build tried; it crashed the game.)
+The overlay rasterises these itself. Picking one here changes the overlay only — ReShade's own
+interface keeps whatever font it was set to.
 
 ## Using one
 
-1. Copy this `fonts` folder next to the game's ReShade DLL (beside `TeamSpeakOverlay.addon64`).
-2. In game, press **Home** → **Settings** tab.
-3. Find ReShade's font option and point it at `fonts\Roboto-Medium.ttf`.
-4. The overlay picks it up immediately — no restart, nothing to set on our side.
+Drop `.ttf`, `.otf` or `.ttc` files into either folder the settings window prints under
+**Typography & font engine**:
 
-This changes ReShade's own UI font as well. That is inherent to the approach, not a bug.
+* `%APPDATA%\TeamSpeakReShadeOverlay\fonts` — created for you on first run. Files here win.
+* `<game folder>\fonts` — beside `TeamSpeakOverlay.addon64`, which is where this folder goes if
+  you copy it out of the release.
+
+Then pick it from the **Font** list. **Rescan fonts folder** picks up anything added since,
+without a restart.
+
+## Weight
+
+The **Weight** control emboldens as the glyphs are rasterised, so a face that ships a single
+weight still gives a convincing Bold. The overlay ships Roboto Medium and defaults to it at
+weight 700, which is the look most people are after; drop a real `Roboto-Bold.ttf` in the folder
+above and select it if you would rather have the designed bold.
 
 ## What is here
 
 | File | Licence |
 |---|---|
-| `Roboto-Medium.ttf` | Apache License 2.0 — © Google Inc. |
-| `Cousine-Regular.ttf` | Apache License 2.0 — © Steve Matteson |
-| `Karla-Regular.ttf` | SIL Open Font License 1.1 — © Jonathan Pinhorn |
-| `DroidSans.ttf` | Apache License 2.0 — © Google Inc. |
+| `Roboto-Medium.ttf` | Apache 2.0 |
+| `Cousine-Regular.ttf` | Apache 2.0 |
+| `Karla-Regular.ttf` | SIL Open Font Licence 1.1 |
+| `DroidSans.ttf` | Apache 2.0 |
 
-All four are redistributable under those terms and are distributed unmodified, as bundled with
-Dear ImGui. Their licences are unaffected by this project's MIT licence.
+Licence texts travel with the fonts upstream; none of them require attribution in the UI.
