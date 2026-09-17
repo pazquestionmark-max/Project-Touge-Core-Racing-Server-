@@ -17,6 +17,7 @@
 // Nothing here blocks: the IPC connection lives on OverlayClient's own thread and the render
 // callback only reads a triple-buffered frame.
 #include <atomic>
+#include <cstdint>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -139,17 +140,25 @@ void load_configuration(AddonState& state) {
 
 /// Called every frame by ReShade, inside its ImGui frame.
 void on_reshade_overlay(reshade::api::effect_runtime* runtime) {
-    (void)runtime;
     AddonState* state = g_state;
     if (state == nullptr || !state->started.load(std::memory_order_acquire)) return;
+    if (runtime == nullptr) return;
 
     ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
     if (draw_list == nullptr) return;
 
-    const ImGuiIO& io = ImGui::GetIO();
+    // The viewport comes from ReShade's own API rather than ImGuiIO::DisplaySize.
+    //
+    // Reading a field off ImGuiIO means trusting that this add-on's imgui.h lays the struct out
+    // exactly as ReShade's ImGui build does. That assumption is what crashed the game when the
+    // font list walked ImFontAtlas, and it is the same assumption here. get_screenshot_width_and_height
+    // is a virtual call across a versioned interface, so there is no layout to guess at.
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    runtime->get_screenshot_width_and_height(&width, &height);
     tsro::Viewport viewport;
-    viewport.width = io.DisplaySize.x;
-    viewport.height = io.DisplaySize.y;
+    viewport.width = static_cast<float>(width);
+    viewport.height = static_cast<float>(height);
     if (viewport.width < 1.0f || viewport.height < 1.0f) return;
 
     const std::int64_t now = now_ms();
