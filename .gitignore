@@ -1,0 +1,11 @@
+build/
+out/
+dist/
+node_modules/
+third_party/
+*.user
+*.suo
+.vs/
+.vscode/
+CMakeUserPresets.json
+*.log
