@@ -24,6 +24,18 @@ struct ImFont;
 
 namespace tsro::overlay {
 
+/// How ReShade's ImGui answered the last text measurement.
+///
+/// Text width drives every right-aligned position and every overflow budget, and ReShade's ImGui
+/// is a different build from the one this add-on compiles against, so measurement is not
+/// something that can simply be assumed to work. `Estimated` means neither table entry returned
+/// a usable width and the overlay is running on a codepoint estimate -- still readable, but the
+/// edges will be a few pixels out. The debug panel shows this.
+enum class TextMetricsSource { Unknown, CalcTextSize, CalcTextSizeA, Estimated };
+
+TextMetricsSource text_metrics_source() noexcept;
+const char* text_metrics_source_name(TextMetricsSource source) noexcept;
+
 /// Mock state for the settings preview. Built from fixed sample users so the preview can show
 /// every indicator without inventing a TeamSpeak event or touching the live model.
 OverlayState preview_state();

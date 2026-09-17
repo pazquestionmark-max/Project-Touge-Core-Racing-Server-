@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cfloat>
 #include <cstdio>
 
 #include <imgui.h>
@@ -34,12 +35,63 @@ std::uint32_t packed(const Color& color, float opacity) {
 /// to point ReShade at the Roboto (and other) .ttf files shipped in the `fonts` folder.
 ImFont* overlay_font() { return ImGui::GetFont(); }
 
+/// Estimated width of a run of text, used only when ReShade's ImGui refuses to measure.
+///
+/// A proportional UI face averages a little over half its pixel size per glyph, so counting
+/// codepoints (not bytes -- UTF-8 continuation bytes are not glyphs) and scaling gets within a
+/// few percent. That is wrong in the last pixel and right in the ones that matter: everything
+/// stays on screen, in the right order, roughly where it belongs.
+float estimate_text_width(std::string_view text, float font_size) {
+    std::size_t glyphs = 0;
+    for (const char c : text) {
+        if ((static_cast<unsigned char>(c) & 0xC0) != 0x80) ++glyphs;
+    }
+    return static_cast<float>(glyphs) * font_size * 0.52f;
+}
+
+/// Which measurement route last answered. Purely diagnostic -- the debug panel shows it so a
+/// measurement problem is visible in the overlay instead of having to be inferred from a
+/// screenshot of misplaced text.
+TextMetricsSource g_metrics_source = TextMetricsSource::Unknown;
+
+/// Width of `text` when drawn at `font_size`.
+///
+/// This is the single most load-bearing number in the renderer: every right-aligned element is
+/// positioned as `edge - width`, and every overflow budget is `panel - width`. A zero here does
+/// not degrade the layout, it inverts it -- rows start at the right edge and grow off-screen,
+/// notification bodies get a zero budget and vanish, and a chat line's body lands on top of its
+/// own prefix. All three were reported together, which is what a zero looks like.
+///
+/// So measurement never returns zero for non-empty text. It only ever calls *through ReShade's
+/// function table* -- reading ImGui structs directly is what crashed the font picker, proving the
+/// layouts of this build's imgui.h and ReShade's own ImGui do not have to agree -- it tries both
+/// table entries that can answer, and estimates if neither does.
 float measure_text(std::string_view text, float font_size) {
-    ImFont* font = overlay_font();
-    if (font == nullptr || text.empty()) return 0.0f;
-    const ImVec2 size = font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, text.data(),
-                                            text.data() + text.size());
-    return size.x;
+    if (text.empty() || font_size <= 0.0f) return 0.0f;
+    const char* const begin = text.data();
+    const char* const end = begin + text.size();
+
+    // The namespace-level entry measures at the *current* font size, so scale the result.
+    const float base = ImGui::GetFontSize();
+    if (base > 0.0f) {
+        const float width = ImGui::CalcTextSize(begin, end, false, -1.0f).x;
+        if (width > 0.0f && std::isfinite(width)) {
+            g_metrics_source = TextMetricsSource::CalcTextSize;
+            return width * (font_size / base);
+        }
+    }
+
+    // The per-font entry takes the size directly, which avoids the scaling round-trip.
+    if (ImFont* font = overlay_font(); font != nullptr) {
+        const float width = font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, begin, end).x;
+        if (width > 0.0f && std::isfinite(width)) {
+            g_metrics_source = TextMetricsSource::CalcTextSizeA;
+            return width;
+        }
+    }
+
+    g_metrics_source = TextMetricsSource::Estimated;
+    return estimate_text_width(text, font_size);
 }
 
 /// Cheap change detector over the fields that affect geometry. Comparing a hash is far less
@@ -121,6 +173,19 @@ UserState preview_user(const char* uid, const char* name) {
 }
 
 }  // namespace
+
+TextMetricsSource text_metrics_source() noexcept { return g_metrics_source; }
+
+const char* text_metrics_source_name(TextMetricsSource source) noexcept {
+    switch (source) {
+        case TextMetricsSource::CalcTextSize: return "ImGui::CalcTextSize";
+        case TextMetricsSource::CalcTextSizeA: return "ImFont::CalcTextSizeA";
+        case TextMetricsSource::Estimated: return "estimated (ImGui returned no width)";
+        case TextMetricsSource::Unknown: break;
+    }
+    return "not measured yet";
+}
+
 
 OverlayState preview_state() {
     // Fixed sample data for the settings preview. It is never fed into the live model and never
@@ -310,6 +375,7 @@ void Renderer::draw_title(ImDrawList* dl, const Config& config, const LayoutResu
                        config.user_list.indicator_gap * config.general.scale
                  : 0.0f);
     }
+    x = std::max(x, title.rect.x + pad_x);
     const float centre_y = title.rect.y + title.rect.h * 0.5f;
     if (title.icon != IconShape::None) {
         const float icon = config.appearance.icon_size * config.general.scale;
@@ -394,6 +460,7 @@ void Renderer::draw_users(ImDrawList* dl, const Config& config, const LayoutResu
             }
             x = row.rect.x + (row.rect.w - content) * 0.5f;
         }
+        x = std::max(x, row.rect.x);
 
         // Leading indicators: Channel Commander sits immediately before the name, as specified.
         for (const ResolvedUser::Indicator& indicator : resolved.leading) {
@@ -491,38 +558,41 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
         const float centre_y = y + height * 0.5f;
         const float text_top = centre_y - font * 0.5f;
 
-        // Right-aligned notifications put their content flush with the box's right edge.
+        // Measure the whole line first, then place it. Deriving the message's budget from the
+        // panel rather than from wherever the cursor happened to land is what makes this safe:
+        // a bad prefix measurement can now only shift the text, never starve it of room. The
+        // previous version skipped the body outright when the budget came out at zero, which is
+        // why notification boxes drew completely empty.
+        const float avail = std::max(16.0f, width - pad_x * 2.0f);
+        const float icon_w = notification.icon != IconShape::None ? icon + gap : 0.0f;
+        const float prefix_w =
+            notification.prefix.empty() ? 0.0f : measure_text(notification.prefix, font) + gap;
+        const float body_budget = std::max(16.0f, avail - icon_w - prefix_w);
+        const float body_w = std::min(measure_text(notification.text, font), body_budget);
+        const float content = std::min(avail, icon_w + prefix_w + body_w);
+
         float x = area.x + pad_x;
         if (nc.placement.align == Align::Right) {
-            float content = 0.0f;
-            if (notification.icon != IconShape::None) content += icon + gap;
-            if (!notification.prefix.empty()) {
-                content += measure_text(notification.prefix, font) + gap;
-            }
-            const float body = measure_text(notification.text, font);
-            content += std::min(body, width - pad_x * 2.0f - content);
-            x = std::max(area.x + pad_x, area.x + width - pad_x - content);
+            x = area.x + width - pad_x - content;
+        } else if (nc.placement.align == Align::Center) {
+            x = area.x + (width - content) * 0.5f;
         }
+        x = std::max(x, area.x + pad_x);
 
         if (notification.icon != IconShape::None) {
             draw_icon(dl, notification.icon, x + icon * 0.5f, centre_y, icon,
                       packed(notification.icon_color, alpha), 1.5f * scale);
-            x += icon + gap;
+            x += icon_w;
         }
         if (!notification.prefix.empty()) {
             draw_text(dl, config, x, text_top, font, packed(notification.icon_color, alpha),
                       notification.prefix);
-            x += measure_text(notification.prefix, font) + gap;
+            x += prefix_w;
         }
 
-        // Whatever space is left after the icon and prefix is the budget for the message. The
-        // message is fitted to it, so it can never run past the panel -- previously it simply
-        // kept drawing and spilled out of the box and over the prefix.
-        float remaining = (area.x + width - pad_x) - x;
-        if (remaining <= 8.0f) {
-            ++index;
-            continue;
-        }
+        // The message is fitted to the budget reserved for it above, so it can never run past
+        // the panel and can never be dropped.
+        float remaining = body_budget;
 
         // The sender's name is drawn in its own colour, the rest of the line in the body colour.
         const std::size_t name_pos =
@@ -668,6 +738,9 @@ void Renderer::draw_chat(ImDrawList* dl, const Config& config, const Viewport& v
         float x = area.x + pad_x;
         if (align == Align::Right) x = area.x + area.w - pad_x - total;
         else if (align == Align::Center) x = area.x + (area.w - total) * 0.5f;
+        // Never start left of the panel: a line wider than the panel reads better clipped on the
+        // right than drawn outside the background it is supposed to sit on.
+        x = std::max(x, area.x + pad_x);
 
         if (!line.prefix.empty()) {
             draw_text(dl, config, x, y, font, packed(line.prefix_color, opacity), line.prefix);

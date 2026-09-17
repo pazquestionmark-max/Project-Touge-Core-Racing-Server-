@@ -1144,6 +1144,16 @@ void SettingsUi::tab_diagnostics(const LinkDiagnostics& diagnostics, const Overl
     ImGui::Text("Draw: %.3f ms", static_cast<double>(stats.last_draw_ms));
     ImGui::Text("Frames drawn: %llu", static_cast<unsigned long long>(stats.frames));
     ImGui::Text("Layouts computed: %llu", static_cast<unsigned long long>(stats.layouts));
+    const TextMetricsSource metrics = text_metrics_source();
+    if (metrics == TextMetricsSource::Estimated) {
+        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.25f, 1.0f), "Text metrics: %s",
+                           text_metrics_source_name(metrics));
+        ImGui::TextDisabled(
+            "ReShade's ImGui returned no text width, so widths are estimated. Alignment will be "
+            "a few pixels out but nothing is hidden.");
+    } else {
+        ImGui::Text("Text metrics: %s", text_metrics_source_name(metrics));
+    }
     ImGui::TextDisabled(
         "The overlay adds no render pass and creates no GPU resource: it appends to the draw "
         "list ReShade already submits.");
