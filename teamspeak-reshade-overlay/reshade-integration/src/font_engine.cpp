@@ -304,45 +304,10 @@ struct FontEngine::Impl {
             r.h = y1 - y0;
             r.ox = x0;
             r.oy = y0;
-            // Emboldening widens the glyph, so the box has to grow with it before rasterising.
-            // A stroke of roughly 4% of the pixel size per 100 units of weight matches what a
-            // designed bold does closely enough to be indistinguishable at HUD sizes.
-            const int grow = embolden_pixels(a.px);
             if (r.w > 0 && r.h > 0 && r.w < kMaxAtlasDim && r.h < kMaxAtlasDim) {
                 r.bitmap.resize(static_cast<std::size_t>(r.w) * static_cast<std::size_t>(r.h));
                 stbtt_MakeCodepointBitmap(&info, r.bitmap.data(), r.w, r.h, r.w, scale, scale,
                                           static_cast<int>(cp));
-                if (grow > 0) {
-                    // Dilate: every pixel takes the strongest coverage within `grow` to its left
-                    // and above, which thickens the stroke without softening its edge.
-                    const int w2 = r.w + grow;
-                    const int h2 = r.h + grow;
-                    std::vector<unsigned char> thick(static_cast<std::size_t>(w2) *
-                                                     static_cast<std::size_t>(h2), 0u);
-                    for (int y = 0; y < h2; ++y) {
-                        for (int x = 0; x < w2; ++x) {
-                            unsigned char best = 0;
-                            for (int dy = 0; dy <= grow; ++dy) {
-                                const int sy = y - dy;
-                                if (sy < 0 || sy >= r.h) continue;
-                                for (int dx = 0; dx <= grow; ++dx) {
-                                    const int sx = x - dx;
-                                    if (sx < 0 || sx >= r.w) continue;
-                                    best = std::max(best,
-                                                    r.bitmap[static_cast<std::size_t>(sy) *
-                                                                 static_cast<std::size_t>(r.w) +
-                                                             static_cast<std::size_t>(sx)]);
-                                }
-                            }
-                            thick[static_cast<std::size_t>(y) * static_cast<std::size_t>(w2) +
-                                  static_cast<std::size_t>(x)] = best;
-                        }
-                    }
-                    r.bitmap = std::move(thick);
-                    r.w = w2;
-                    r.h = h2;
-                    r.advance += static_cast<float>(grow);
-                }
             } else {
                 r.w = 0;
                 r.h = 0;
@@ -472,12 +437,17 @@ struct FontEngine::Impl {
         return true;
     }
 
-    /// How many pixels of stroke the configured weight adds at this size.
-    int embolden_pixels(int px) const {
-        if (weight <= 400) return 0;
-        const float extra = static_cast<float>(weight - 400) / 100.0f * 0.04f *
-                            static_cast<float>(px);
-        return std::clamp(static_cast<int>(std::lround(extra)), 0, 6);
+    /// How far the second stroke is offset for the configured weight, in pixels at this size.
+    ///
+    /// Drawn rather than baked. Dilating the glyph bitmap was the first attempt and it bloated
+    /// the text: a box dilation thickens vertically as much as horizontally and rounds every
+    /// corner, which at HUD sizes reads as a smear rather than a bold. A designed bold is mostly
+    /// a wider stem, so a single extra stroke a fraction of a pixel to the side is both closer
+    /// to the real thing and far gentler.
+    float bold_offset(float px) const {
+        if (weight <= 400) return 0.0f;
+        const float t = std::min(1.0f, static_cast<float>(weight - 400) / 300.0f);
+        return t * std::max(0.6f, px / 22.0f);
     }
 
     int key_for(float px) const {
@@ -590,7 +560,6 @@ void FontEngine::set_weight(int weight) {
     const int clamped = std::clamp(weight, 100, 900);
     if (clamped == impl_->weight) return;
     impl_->weight = clamped;
-    impl_->unload_textures();   // every baked size is the wrong weight now
 }
 
 void FontEngine::release() { impl_->unload_textures(); }
@@ -620,9 +589,12 @@ float FontEngine::measure(std::string_view text, float px) {
     Impl::Atlas* atlas = impl_->live_atlas(px);
     if (atlas == nullptr) return 0.0f;
     const float scale = px / static_cast<float>(atlas->px);
+    const float bold = impl_->bold_offset(px);
     float width = 0.0f;
+    std::size_t glyphs = 0;
     for (std::size_t i = 0; i < text.size();) {
         const std::uint32_t cp = next_codepoint(text, i);
+        ++glyphs;
         const auto it = atlas->glyphs.find(cp);
         if (it == atlas->glyphs.end()) {
             const auto fallback = atlas->glyphs.find('?');
@@ -633,7 +605,8 @@ float FontEngine::measure(std::string_view text, float px) {
         }
         width += it->second.advance;
     }
-    return width * scale;
+    // The extra stroke widens every glyph, so measurement has to know about it too.
+    return width * scale + bold * static_cast<float>(glyphs);
 }
 
 float FontEngine::ascent(float px) {
@@ -656,6 +629,8 @@ void FontEngine::draw(ImDrawList* dl, float x, float y, float px, std::uint32_t 
     const float origin = std::floor(x + 0.5f);
     const float baseline = std::floor(y + atlas->ascent * scale + 0.5f);
 
+    const float bold = impl_->bold_offset(px);
+
     dl->PushTextureID(static_cast<ImTextureID>(atlas->texture_handle));
     float pen = origin;
     for (std::size_t i = 0; i < text.size();) {
@@ -674,12 +649,19 @@ void FontEngine::draw(ImDrawList* dl, float x, float y, float px, std::uint32_t 
             // Whole-pixel quads, so each glyph lands on the texel grid it was baked against.
             const float gx = std::floor(pen + g.x0 * scale + 0.5f);
             const float gy = std::floor(baseline + g.y0 * scale + 0.5f);
+            const float gw = (g.x1 - g.x0) * scale;
+            const float gh = (g.y1 - g.y0) * scale;
             dl->PrimReserve(6, 4);
-            dl->PrimRectUV(ImVec2(gx, gy),
-                           ImVec2(gx + (g.x1 - g.x0) * scale, gy + (g.y1 - g.y0) * scale),
-                           ImVec2(g.u0, g.v0), ImVec2(g.u1, g.v1), color);
+            dl->PrimRectUV(ImVec2(gx, gy), ImVec2(gx + gw, gy + gh), ImVec2(g.u0, g.v0),
+                           ImVec2(g.u1, g.v1), color);
+            if (bold > 0.0f) {
+                // One more stroke beside the first: a wider stem, which is what weight is.
+                dl->PrimReserve(6, 4);
+                dl->PrimRectUV(ImVec2(gx + bold, gy), ImVec2(gx + bold + gw, gy + gh),
+                               ImVec2(g.u0, g.v0), ImVec2(g.u1, g.v1), color);
+            }
         }
-        pen += g.advance * scale;
+        pen += g.advance * scale + bold;
     }
     dl->PopTextureID();
 }

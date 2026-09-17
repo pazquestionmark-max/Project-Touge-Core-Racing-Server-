@@ -130,6 +130,7 @@ std::uint64_t layout_hash(const Config& c) {
     };
     mix_f(c.general.scale);
     mix_f(c.appearance.font_size);
+    mix(static_cast<std::uint64_t>(c.appearance.font_weight));
     mix_f(c.appearance.icon_size);
     mix_f(c.appearance.row_height);
     mix_f(c.appearance.row_spacing);
@@ -381,21 +382,31 @@ void Renderer::draw_text(ImDrawList* dl, const Config& config, float x, float y,
         }
     };
 
-    // The outline is drawn as copies of the glyphs around a circle.
+    // The outline is a disc of copies of the glyphs, at whole-pixel offsets.
     //
-    // It used to be eight copies at the corners and edges of a square, which is why it looked
-    // uneven: the diagonal copies sit 1.41 times further out than the straight ones, so the
-    // corners were thin and the sides were thick. Sampling a circle instead puts every copy the
-    // same distance from the glyph, and the count rises with the thickness so a thick outline
-    // does not show the gaps between its samples.
+    // Two things were wrong before. The offsets traced a square, so the diagonal copies sat 1.41
+    // times further out than the straight ones and the corners came out thin. And they were
+    // fractional, which the pixel snapping in the font engine then collapsed onto a handful of
+    // the same positions -- so what should have been an even ring became a few heavy blobs.
+    // Every integer offset within the radius is used instead: even by construction, and immune
+    // to snapping because it is already on the grid.
     if (config.appearance.text_outline && config.appearance.text_outline_thickness > 0.0f) {
-        const float t = config.appearance.text_outline_thickness;
         const std::uint32_t outline = config.appearance.text_outline_color.to_abgr();
-        const int samples = std::clamp(static_cast<int>(std::lround(t * 8.0f)), 8, 24);
-        for (int i = 0; i < samples; ++i) {
-            const float angle = 6.28318530718f * static_cast<float>(i) /
-                                static_cast<float>(samples);
-            emit(x + std::cos(angle) * t, y + std::sin(angle) * t, outline);
+        // Scaled to the text it surrounds: a fixed pixel radius that looks right on a 14px
+        // roster name is a hairline on a 32px channel title. Thickness is read as "pixels at a
+        // 16px face" and grows from there, so one setting holds across every element and every
+        // display scale.
+        const int radius = std::clamp(
+            static_cast<int>(std::lround(config.appearance.text_outline_thickness * size / 16.0f)),
+            1, 4);
+        const float limit = static_cast<float>(radius) + 0.25f;
+        for (int dy = -radius; dy <= radius; ++dy) {
+            for (int dx = -radius; dx <= radius; ++dx) {
+                if (dx == 0 && dy == 0) continue;
+                const float distance = std::sqrt(static_cast<float>(dx * dx + dy * dy));
+                if (distance > limit) continue;
+                emit(x + static_cast<float>(dx), y + static_cast<float>(dy), outline);
+            }
         }
     } else if (config.appearance.text_shadow) {
         // A one-pixel drop shadow is what keeps light text readable over bright game content,
