@@ -199,6 +199,9 @@ NotificationStyle whisper_notification() {
 
 NotificationStyle chat_notification() {
     NotificationStyle n;
+    // Someone else's prose, of unbounded length: wrap it rather than growing a toast as wide
+    // as the screen.
+    n.wrap = true;
     n.enabled = false;  // the chat feed is the normal presentation; toasts are opt-in
     n.format = "{name}: {message}";
     n.prefix = "[#]";
@@ -212,6 +215,9 @@ NotificationStyle chat_notification() {
 
 NotificationStyle private_chat_notification() {
     NotificationStyle n;
+    // Someone else's prose, of unbounded length: wrap it rather than growing a toast as wide
+    // as the screen.
+    n.wrap = true;
     // Off by default, like every other path to a private message in this project: the overlay
     // never surfaces private chat until it is asked to. Switching this on also asks the plugin
     // to start sending them -- until then it is not even told about them.

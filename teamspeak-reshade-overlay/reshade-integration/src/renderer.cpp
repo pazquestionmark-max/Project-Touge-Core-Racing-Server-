@@ -560,72 +560,91 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
     const float icon = config.appearance.icon_size * scale;
     const float gap = std::max(4.0f, config.user_list.indicator_gap * scale);
     const float bar_w = box.accent_bar ? box.accent_bar_width * scale : 0.0f;
-    const float height = std::max(nc.min_height * scale, font + pad_y * 2.0f);
+    const float line_h = font * 1.25f;
     const float spacing = nc.spacing * scale;
     const float ceiling = std::max(80.0f, std::min(box.max_width * scale, viewport.width - 16.0f));
 
     const MeasureFn measure = [](std::string_view t, float size) { return measure_text(t, size); };
 
-    const std::size_t count = notifications_.items().size();
-    const float stack_height =
-        static_cast<float>(count) * height + static_cast<float>(count - 1) * spacing;
-    // Placement is resolved once against the widest a toast may get. Every anchor puts its own
-    // edge at a position that does not depend on the box width -- a right anchor pins the right
-    // edge, a centred one the centre -- so this frame of reference stays correct even though
-    // each toast below is a different width.
-    const Rect area = resolve_placement(nc.placement, ceiling, stack_height, viewport);
-
-    /// Width of one toast's content, and the pieces it is made of.
-    struct Content {
-        float icon_w = 0.0f;
-        float prefix_w = 0.0f;
-        float body_w = 0.0f;
-        float badge_w = 0.0f;
-        float box_w = 0.0f;
-    };
-
-    const auto measure_content = [&](const Notification& n, std::string_view badge) {
-        Content c;
-        c.icon_w = n.icon != IconShape::None ? icon + gap : 0.0f;
-        c.prefix_w = n.prefix.empty() ? 0.0f : measure_text(n.prefix, font) + gap;
-        c.badge_w = badge.empty() ? 0.0f : measure_text(badge, font) + gap;
-        const float chrome = bar_w + pad_x * 2.0f + c.icon_w + c.prefix_w + c.badge_w;
-        const float wanted = measure_text(n.text, font);
-        if (box.auto_width) {
-            c.body_w = std::min(wanted, std::max(16.0f, ceiling - chrome));
-            c.box_w = std::min(ceiling, std::max(nc.min_height * scale, chrome + c.body_w));
-        } else {
-            c.box_w = std::min(ceiling, nc.width * scale);
-            c.body_w = std::min(wanted, std::max(16.0f, c.box_w - chrome));
-        }
-        return c;
-    };
-
-    std::size_t index = 0;
+    // Pass one: lay every toast out, because their heights differ once a message wraps and the
+    // stack cannot be positioned until they are known.
+    //
+    // An event line ("someone left a channel") widens instead of wrapping: it is one short
+    // sentence and losing its ending to an ellipsis is worse than a wider box. A message wraps,
+    // because someone else's prose has no length limit and a toast as wide as the screen is
+    // unreadable. That choice is per category, carried on the notification itself.
+    toasts_.clear();
     for (const Notification& notification : notifications_.items()) {
         const float fade = notification.opacity(now_ms);
-        if (fade <= 0.003f) {
-            ++index;
-            continue;
-        }
-        const float alpha = opacity * fade;
-        // Stacking direction decides whether new notifications push downwards or upwards.
-        const float offset = static_cast<float>(
-            nc.stack == StackDirection::Down ? index : (count - 1 - index));
-        const float y = area.y + offset * (height + spacing);
+        if (fade <= 0.003f) continue;
 
-        text_scratch_.clear();
+        Toast t;
+        t.item = &notification;
+        t.alpha = opacity * fade;
+        t.icon_w = notification.icon != IconShape::None ? icon + gap : 0.0f;
+        t.prefix_w =
+            notification.prefix.empty() ? 0.0f : measure_text(notification.prefix, font) + gap;
+        t.badge.clear();
         if (notification.repeat_count > 1) {
-            text_scratch_ = "x" + std::to_string(notification.repeat_count);
+            t.badge = "x" + std::to_string(notification.repeat_count);
         }
-        const Content content = measure_content(notification, text_scratch_);
+        t.badge_w = t.badge.empty() ? 0.0f : measure_text(t.badge, font) + gap;
+
+        const float chrome = bar_w + pad_x * 2.0f + t.icon_w + t.prefix_w + t.badge_w;
+        const float wanted = measure_text(notification.text, font);
+        const float room = std::max(16.0f, ceiling - chrome);
+
+        if (notification.wrap && wanted > room) {
+            const FittedText fitted = fit_text(notification.text, room, font, OverflowMode::Wrap,
+                                               1.0f, measure);
+            t.lines = fitted.lines;
+            const std::size_t cap =
+                static_cast<std::size_t>(std::max(1, notification.max_lines));
+            if (t.lines.size() > cap) {
+                t.lines.resize(cap);
+                if (!t.lines.back().empty()) t.lines.back() += "...";
+            }
+            t.body_w = 0.0f;
+            for (const std::string& line : t.lines) {
+                t.body_w = std::max(t.body_w, measure_text(line, font));
+            }
+        } else {
+            // Not wrapping: take the width the text needs, up to the cap, and only then clip.
+            t.body_w = std::min(wanted, room);
+            t.lines.assign(1, notification.text);
+        }
+        if (t.lines.empty()) t.lines.assign(1, std::string());
+
+        t.box_w = std::min(ceiling, chrome + t.body_w);
+        t.box_h = std::max(nc.min_height * scale,
+                           pad_y * 2.0f + line_h * static_cast<float>(t.lines.size()));
+        toasts_.push_back(std::move(t));
+    }
+    if (toasts_.empty()) return;
+
+    float stack_height = 0.0f;
+    for (const Toast& t : toasts_) stack_height += t.box_h + spacing;
+    stack_height -= spacing;
+
+    // Placement is resolved once against the widest a toast may get. Every anchor puts its own
+    // edge at a position that does not depend on the box width -- a right anchor pins the right
+    // edge -- so this frame of reference stays correct though each toast is a different size.
+    const Rect area = resolve_placement(nc.placement, ceiling, stack_height, viewport);
+
+    float y = area.y;
+    for (std::size_t index = 0; index < toasts_.size(); ++index) {
+        // Stacking direction decides whether new notifications push downwards or upwards.
+        const Toast& t = toasts_[nc.stack == StackDirection::Down ? index
+                                                                 : toasts_.size() - 1 - index];
+        const Notification& notification = *t.item;
+        const float alpha = t.alpha;
 
         // Each toast is aligned inside the stack's frame rather than filling it.
         float box_x = area.x;
         if (nc.placement.align == Align::Right) {
-            box_x = area.right() - content.box_w;
+            box_x = area.right() - t.box_w;
         } else if (nc.placement.align == Align::Center) {
-            box_x = area.x + (area.w - content.box_w) * 0.5f;
+            box_x = area.x + (area.w - t.box_w) * 0.5f;
         }
 
         // The edge. Accent takes the category's own colour so each kind of event is
@@ -636,74 +655,74 @@ void Renderer::draw_notifications(ImDrawList* dl, const Config& config, const Vi
         } else if (box.border == NotificationBorder::Custom) {
             edge = packed(box.border_color, alpha);
         }
-        draw_panel(dl, box_x, y, content.box_w, height, box.corner_radius,
+        draw_panel(dl, box_x, y, t.box_w, t.box_h, box.corner_radius,
                    notification.show_background ? packed(box.background, alpha) : 0u, edge,
                    box.border_thickness * scale);
 
-        // The stripe down the leading edge, in the category colour. Drawn inside the rounded
-        // rectangle so it follows the corner rather than poking out of it.
+        // The stripe down the leading edge, in the category colour.
         if (bar_w > 0.0f) {
-            const float inset = std::min(box.corner_radius * 0.5f, height * 0.25f);
-            dl->AddRectFilled(ImVec2(box_x + box.border_thickness * scale, y + inset),
-                              ImVec2(box_x + box.border_thickness * scale + bar_w, y + height - inset),
-                              packed(notification.icon_color, alpha), 0.0f);
+            const float inset = std::min(box.corner_radius * 0.5f, t.box_h * 0.25f);
+            dl->AddRectFilled(
+                ImVec2(box_x + box.border_thickness * scale, y + inset),
+                ImVec2(box_x + box.border_thickness * scale + bar_w, y + t.box_h - inset),
+                packed(notification.icon_color, alpha), 0.0f);
         }
 
-        const float centre_y = y + height * 0.5f;
-        const float text_top = centre_y - font * 0.5f;
-
-        // Content always starts after the stripe and padding, and its budget comes from the box
-        // rather than from wherever the cursor landed -- a bad measurement can shift text but
-        // can never starve it of room, which is what used to leave these boxes empty.
-        float x = box_x + bar_w + pad_x;
+        // The first line carries the icon and prefix; wrapped lines align under the message.
+        const float body_x = box_x + bar_w + pad_x + t.icon_w + t.prefix_w;
+        const float first_top = y + (t.box_h - line_h * static_cast<float>(t.lines.size())) * 0.5f +
+                                (line_h - font) * 0.5f;
 
         if (notification.icon != IconShape::None) {
-            draw_icon(dl, notification.icon, x + icon * 0.5f, centre_y, icon,
-                      packed(notification.icon_color, alpha), 1.5f * scale);
-            x += content.icon_w;
+            draw_icon(dl, notification.icon, box_x + bar_w + pad_x + icon * 0.5f,
+                      first_top + font * 0.5f, icon, packed(notification.icon_color, alpha),
+                      1.5f * scale);
         }
         if (!notification.prefix.empty()) {
-            draw_text(dl, config, x, text_top, font, packed(notification.icon_color, alpha),
-                      notification.prefix);
-            x += content.prefix_w;
+            draw_text(dl, config, box_x + bar_w + pad_x + t.icon_w, first_top, font,
+                      packed(notification.icon_color, alpha), notification.prefix);
         }
-
-        float remaining = std::max(16.0f, content.body_w);
 
         // The sender's name is drawn in its own colour, the rest of the line in the body colour.
-        const std::size_t name_pos =
-            notification.name.empty() ? std::string::npos
-                                      : notification.text.find(notification.name);
+        for (std::size_t line_index = 0; line_index < t.lines.size(); ++line_index) {
+            const std::string& line = t.lines[line_index];
+            const float line_top = first_top + line_h * static_cast<float>(line_index);
+            float x = body_x;
+            float remaining = std::max(16.0f, t.body_w);
 
-        const auto draw_segment = [&](std::string_view segment, std::uint32_t colour) {
-            if (segment.empty() || remaining <= 4.0f) return;
-            const FittedText fitted =
-                fit_text(segment, remaining, font, OverflowMode::Ellipsis, 0.75f, measure);
-            draw_text(dl, config, x, text_top, font, colour, fitted.text);
-            const float used = measure_text(fitted.text, font);
-            x += used;
-            remaining -= used;
-        };
+            const auto draw_segment = [&](std::string_view segment, std::uint32_t colour) {
+                if (segment.empty() || remaining <= 4.0f) return;
+                const FittedText fitted =
+                    fit_text(segment, remaining, font, OverflowMode::Ellipsis, 0.75f, measure);
+                draw_text(dl, config, x, line_top, font, colour, fitted.text);
+                const float used = measure_text(fitted.text, font);
+                x += used;
+                remaining -= used;
+            };
 
-        if (name_pos == std::string::npos) {
-            draw_segment(notification.text, packed(notification.text_color, alpha));
-        } else {
-            const std::string_view whole(notification.text);
-            draw_segment(whole.substr(0, name_pos), packed(notification.text_color, alpha));
-            draw_segment(whole.substr(name_pos, notification.name.size()),
-                         packed(notification.name_color, alpha));
-            draw_segment(whole.substr(name_pos + notification.name.size()),
-                         packed(notification.text_color, alpha));
+            const std::size_t name_pos =
+                notification.name.empty() ? std::string::npos : line.find(notification.name);
+            if (name_pos == std::string::npos) {
+                draw_segment(line, packed(notification.text_color, alpha));
+            } else {
+                const std::string_view whole(line);
+                draw_segment(whole.substr(0, name_pos), packed(notification.text_color, alpha));
+                draw_segment(whole.substr(name_pos, notification.name.size()),
+                             packed(notification.name_color, alpha));
+                draw_segment(whole.substr(name_pos + notification.name.size()),
+                             packed(notification.text_color, alpha));
+            }
         }
 
-        if (!text_scratch_.empty()) {
+        if (!t.badge.empty()) {
             // The repeat count has its own reserved width, so it sits beside the message
             // instead of on top of it.
-            const float w = measure_text(text_scratch_, font);
-            draw_text(dl, config, box_x + content.box_w - pad_x - w, text_top, font,
-                      packed(config.appearance.text_secondary, alpha), text_scratch_);
+            const float w = measure_text(t.badge, font);
+            draw_text(dl, config, box_x + t.box_w - pad_x - w, first_top, font,
+                      packed(config.appearance.text_secondary, alpha), t.badge);
         }
-        ++index;
+
+        y += t.box_h + spacing;
     }
 }
 

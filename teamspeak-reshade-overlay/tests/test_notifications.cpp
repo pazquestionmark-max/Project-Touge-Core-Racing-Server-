@@ -385,3 +385,39 @@ TEST(notifications, private_message_toasts_are_off_until_asked_for) {
 
     CHECK(q.items().empty());
 }
+
+TEST(notifications, an_event_line_widens_while_a_message_wraps) {
+    // "X left Y" is one short sentence: it should take the room it needs rather than lose its
+    // ending to an ellipsis. Someone else's prose has no length limit, so it wraps instead.
+    const Config cfg = Config::defaults();
+    CHECK(!cfg.notifications.join.wrap);
+    CHECK(!cfg.notifications.leave.wrap);
+    CHECK(!cfg.notifications.channel_switch.wrap);
+    CHECK(!cfg.notifications.connection.wrap);
+    CHECK(cfg.notifications.chat.wrap);
+    CHECK(cfg.notifications.private_chat.wrap);
+}
+
+TEST(notifications, the_wrap_choice_reaches_the_renderer) {
+    Config cfg = Config::defaults();
+    cfg.notifications.private_chat.enabled = true;
+    NotificationQueue q;
+
+    OverlayEvent joined;
+    joined.kind = OverlayEventKind::UserJoined;
+    joined.display_name = "Alice";
+    joined.channel_name = "Racing";
+    q.submit(joined, cfg, 1000);
+
+    OverlayEvent pm;
+    pm.kind = OverlayEventKind::ChatMessage;
+    pm.chat.category = ChatCategory::Private;
+    pm.chat.sender_name = "Bob";
+    pm.chat.text = "a much longer message that would widen a toast past anything readable";
+    q.submit(pm, cfg, 1000);
+
+    CHECK_EQ(q.items().size(), std::size_t{2});
+    CHECK(!q.items().front().wrap);
+    CHECK(q.items().back().wrap);
+    CHECK(q.items().back().max_lines >= 1);
+}

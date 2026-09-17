@@ -40,6 +40,10 @@ struct Notification {
     bool show_background = true;
     bool show_border = true;
     bool play_sound = false;
+    /// Carried from the style so the renderer does not need the configuration to decide whether
+    /// this toast grows sideways or downwards.
+    bool wrap = false;
+    int max_lines = 4;
     std::string sound_file;
 
     std::int64_t created_ms = 0;

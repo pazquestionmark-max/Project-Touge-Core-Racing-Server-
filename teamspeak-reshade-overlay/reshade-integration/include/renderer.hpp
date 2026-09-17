@@ -97,6 +97,22 @@ private:
     LayoutResult layout_;
     NotificationQueue notifications_;
     SpeakingEnvelope envelope_;
+    /// One laid-out notification. Kept as a member so the per-frame layout does not allocate
+    /// afresh every frame on the render thread.
+    struct Toast {
+        const Notification* item = nullptr;
+        float alpha = 0.0f;
+        float icon_w = 0.0f;
+        float prefix_w = 0.0f;
+        float badge_w = 0.0f;
+        float body_w = 0.0f;
+        float box_w = 0.0f;
+        float box_h = 0.0f;
+        std::string badge;
+        std::vector<std::string> lines;
+    };
+    std::vector<Toast> toasts_;
+
     FrameStats stats_;
 
     bool layout_dirty_ = true;

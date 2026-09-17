@@ -252,6 +252,8 @@ json::Value write(const NotificationStyle& n) {
     o.set("fade", write(n.fade));
     o.set("sound", json::Value(n.sound));
     o.set("sound_file", json::Value(n.sound_file));
+    o.set("wrap", json::Value(n.wrap));
+    o.set("max_lines", json::Value(n.max_lines));
     return o;
 }
 
@@ -270,6 +272,8 @@ void read(const R& r, NotificationStyle& n) {
     read(r.sub("fade"), n.fade);
     r.b("sound", n.sound);
     r.s("sound_file", n.sound_file, 260);
+    r.b("wrap", n.wrap);
+    r.i("max_lines", n.max_lines, 1, 12);
 }
 
 json::Value write(const UserOverride& u) {

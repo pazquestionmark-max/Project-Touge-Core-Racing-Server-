@@ -136,6 +136,8 @@ void NotificationQueue::submit(const OverlayEvent& ev, const Config& cfg, std::i
     n.fade = st.fade;
     n.phase = NotificationPhase::FadeIn;
     n.play_sound = st.sound && !st.sound_file.empty();
+    n.wrap = st.wrap;
+    n.max_lines = st.max_lines;
     n.sound_file = st.sound_file;
 
     // Per-user colour overrides apply to the name inside notifications too, so a user who is

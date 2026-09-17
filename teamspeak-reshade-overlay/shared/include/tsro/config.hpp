@@ -277,6 +277,14 @@ struct NotificationStyle {
     Fade fade{180, 320, 3500, 0.0f, 1.0f, Easing::EaseOutBack};
     bool sound = false;
     std::string sound_file;
+    /// Wrap the message onto further lines instead of widening the box.
+    ///
+    /// On for the two kinds that carry someone else's prose -- a chat or private message can be
+    /// any length, and a toast as wide as the screen is unreadable. Off for the rest: "X left
+    /// Y" is one short line and should simply take the room it needs.
+    bool wrap = false;
+    /// Most lines a wrapped message may use before it is ellipsised.
+    int max_lines = 4;
 };
 
 /// The box every notification is drawn in.
@@ -297,7 +305,9 @@ struct NotificationBoxStyle {
     float accent_bar_width = 3.0f;
     /// Size each toast to its own text instead of a fixed column, as the reference layout does.
     bool auto_width = true;
-    float max_width = 560.0f;
+    /// The cap on a toast that sizes itself. Generous on purpose: a one-line event like
+    /// "someone left a channel" should extend rather than lose its ending to an ellipsis.
+    float max_width = 900.0f;
 };
 
 struct NotificationsConfig {

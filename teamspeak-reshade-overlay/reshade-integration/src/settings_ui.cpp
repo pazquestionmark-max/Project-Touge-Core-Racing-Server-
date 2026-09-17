@@ -1144,6 +1144,30 @@ void SettingsUi::tab_diagnostics(const LinkDiagnostics& diagnostics, const Overl
                            "live.");
     }
 
+    // Friends have now been reported broken twice from a screenshot alone, which is not enough
+    // to tell "TeamSpeak never said they were a friend" apart from "we were told and did not
+    // colour it". This says which, per person, in one place.
+    ImGui::SeparatorText("Friends");
+    if (frame.state.users.empty()) {
+        ImGui::TextDisabled("Nobody in the channel.");
+    } else {
+        ImGui::Text("Colour friends differently: %s",
+                    config.user_list.color_friends ? "on" : "OFF");
+        ImGui::Text("Use TeamSpeak's Contacts: %s",
+                    config.user_list.use_teamspeak_friends ? "on" : "OFF");
+        for (const UserState& user : frame.state.users) {
+            const char* reported = !user.is_friend.has_value() ? "unknown"
+                                                               : (*user.is_friend ? "friend"
+                                                                                  : "not a friend");
+            ImGui::Text("%s -- TeamSpeak says: %s%s%s", user.display_name.c_str(), reported,
+                        user.friend_nickname.empty() ? "" : ", nickname: ",
+                        user.friend_nickname.c_str());
+        }
+        ImGui::TextDisabled(
+            "\"unknown\" means the contact list could not be read at all -- the plugin's own "
+            "line above says why.");
+    }
+
     ImGui::SeparatorText("Rendering");
     ImGui::Text("Layout: %.3f ms", static_cast<double>(stats.last_layout_ms));
     ImGui::Text("Draw: %.3f ms", static_cast<double>(stats.last_draw_ms));
