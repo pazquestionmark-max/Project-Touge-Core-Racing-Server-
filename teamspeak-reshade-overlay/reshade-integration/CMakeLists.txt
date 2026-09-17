@@ -64,8 +64,11 @@ target_include_directories(tsro_addon
   PRIVATE ${TSRO_IMGUI_DIR}
 )
 
-# We compile ImGui's headers for the type definitions only; the implementation lives inside
-# ReShade and is reached through the function table, so no ImGui .cpp is compiled or linked.
+# No ImGui .cpp is compiled or linked: ReShade's reshade_overlay.hpp supplies inline definitions
+# for the whole ImGui:: namespace *and* for ImDrawList::/ImFont:: members, all routed through the
+# function table ReShade hands the add-on. imgui.h is included for the type definitions and the
+# declarations those inline definitions attach to -- which is why every source that calls ImGui
+# must include reshade.hpp as well, or it links against nothing.
 target_compile_definitions(tsro_addon PRIVATE
   IMGUI_DISABLE_OBSOLETE_FUNCTIONS
   IMGUI_DISABLE_DEMO_WINDOWS

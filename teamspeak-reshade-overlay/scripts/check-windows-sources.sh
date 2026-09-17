@@ -6,12 +6,16 @@
 # missing includes, wrong signatures, non-copyable types passed by value -- without waiting for
 # a Windows machine.
 #
-# What it does NOT prove: that the shipped binaries are correct. MSVC is the only supported
-# compiler for a ReShade add-on, and the Windows CI job is the authoritative build. In
-# particular addon.cpp cannot fully compile here: ReShade's own reshade.hpp casts a function
+# What it does NOT prove:
+#   * That anything links. This is -fsyntax-only, so unresolved symbols are invisible to it.
+#     A missing #include <reshade.hpp> in a file that calls ImGui passes here and then fails
+#     at link on Windows -- that has actually happened. Only the MSVC job catches it.
+#   * That the shipped binaries are correct. MSVC is the only supported compiler for a ReShade
+#     add-on and the Windows CI job is authoritative.
+# addon.cpp additionally cannot fully compile here: ReShade's own reshade.hpp casts a function
 # pointer to void* with static_cast, which MSVC accepts as an extension and ISO C++ rejects.
-# That error comes from ReShade's header, not from this project, and the script reports any
-# diagnostic originating in our own files separately so it is not mistaken for that one.
+# That error comes from ReShade's header, not from this project, so the script reports
+# diagnostics originating in our own files separately and ignores that one.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -23,6 +23,8 @@
 #include <string>
 
 #include <imgui.h>
+// Order matters: reshade.hpp defines the ImGui:: and ImDrawList:: members that imgui.h only
+// declares, routing them through ReShade's function table.
 #include <reshade.hpp>
 
 #include "renderer.hpp"

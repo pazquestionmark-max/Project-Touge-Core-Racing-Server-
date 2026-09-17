@@ -4,6 +4,10 @@
 #include <cmath>
 
 #include <imgui.h>
+// reshade.hpp must follow imgui.h: it supplies the inline definitions for ImGui:: and
+// ImDrawList:: that route through ReShade's function table. imgui.h alone only declares them,
+// so omitting this compiles cleanly and then fails at link with unresolved externals.
+#include <reshade.hpp>
 
 namespace tsro::overlay {
 namespace {
