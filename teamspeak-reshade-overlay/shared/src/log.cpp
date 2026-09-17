@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdio>
 #include <ctime>
+#include <fstream>
 #include <algorithm>
 
 namespace tsro {
@@ -73,7 +74,7 @@ void Logger::configure(LogLevel level, bool to_file, std::string file_path, int 
     if (to_file_) {
         // Truncate on configure so each run starts with its own log rather than appending to an
         // arbitrarily old one.
-        if (std::FILE* f = std::fopen(file_path_.c_str(), "wb")) std::fclose(f);
+        std::ofstream truncate(file_path_, std::ios::binary | std::ios::trunc);
     }
 }
 
@@ -131,14 +132,25 @@ void Logger::write(LogLevel level, std::string_view component, std::string_view 
 
     if (!to_file_) return;
     if (bytes_ >= max_bytes_) rotate_locked();
-    if (std::FILE* f = std::fopen(file_path_.c_str(), "ab")) {
-        const int n = std::fprintf(f, "%s [%-5s] %s: %.*s\n",
-                                   format_timestamp(entry.timestamp_ms).c_str(),
-                                   to_string(level), entry.component.c_str(),
-                                   static_cast<int>(message.size()), message.data());
-        if (n > 0) bytes_ += static_cast<std::uint64_t>(static_cast<unsigned>(n));
-        std::fclose(f);
-    }
+
+    std::string level_field = to_string(level);
+    level_field.resize(5, ' ');  // fixed-width so the columns line up when read back
+
+    std::string line;
+    line.reserve(entry.component.size() + message.size() + 48);
+    line += format_timestamp(entry.timestamp_ms);
+    line += " [";
+    line += level_field;
+    line += "] ";
+    line += entry.component;
+    line += ": ";
+    line.append(message);
+    line += '\n';
+
+    std::ofstream out(file_path_, std::ios::binary | std::ios::app);
+    if (!out) return;
+    out.write(line.data(), static_cast<std::streamsize>(line.size()));
+    if (out) bytes_ += line.size();
 }
 
 std::vector<LogEntry> Logger::recent(std::size_t max_entries) const {

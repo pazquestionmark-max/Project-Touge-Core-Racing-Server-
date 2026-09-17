@@ -35,10 +35,5 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
   set_target_properties(tsro_ts3plugin PROPERTIES OUTPUT_NAME "tsro_overlay_win32")
 endif()
 
-if(MSVC)
-  # Static CRT: a plugin that needs a redistributable the user has not installed simply fails to
-  # load, with no diagnostic they can act on.
-  set_property(TARGET tsro_ts3plugin PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
 
 install(TARGETS tsro_ts3plugin RUNTIME DESTINATION plugin LIBRARY DESTINATION plugin)

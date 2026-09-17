@@ -14,6 +14,14 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
+# Static CRT for every target, set once here rather than per target. The plugin and the add-on
+# need it -- a DLL that depends on a redistributable the user has not installed simply fails to
+# load, with no diagnostic they can act on -- and a static library built against the dynamic CRT
+# cannot be linked into them (LNK2038). Setting it in one place is what stops those drifting.
+if(MSVC)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 # These two live in the game process and the voice client; both are built for size and speed
 # with no runtime the user must install separately.
 if(MSVC)

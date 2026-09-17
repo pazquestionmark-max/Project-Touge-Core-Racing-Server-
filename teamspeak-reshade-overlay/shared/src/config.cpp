@@ -843,17 +843,13 @@ bool migrate(json::Value& doc, ConfigDiagnostics& diag) {
         return true;
     }
     // Each step upgrades exactly one version, so a file from any past release converges.
+    // Add a step here when kConfigVersion is raised, e.g.:
+    //     if (v == 1) { migrate_v1_to_v2(doc); }
+    //     else { ...unknown... }
     while (v < kConfigVersion) {
-        switch (v) {
-            // case 1: migrate_v1_to_v2(doc); break;   <- added alongside kConfigVersion = 2
-            default:
-                diag.add(ConfigIssue::Severity::Error, "config_version",
-                         "no migration path from this version; using defaults");
-                return false;
-        }
-        ++v;
-        doc.set("config_version", json::Value(v));
-        diag.migrated = true;
+        diag.add(ConfigIssue::Severity::Error, "config_version",
+                 "no migration path from this version; using defaults");
+        return false;
     }
     return true;
 }

@@ -85,8 +85,5 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
   set_target_properties(tsro_addon PROPERTIES SUFFIX ".addon")
 endif()
 
-if(MSVC)
-  set_property(TARGET tsro_addon PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
 
 install(TARGETS tsro_addon RUNTIME DESTINATION addon LIBRARY DESTINATION addon)
