@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v1.0.0). Created if it does not exist."
+        required: true
+        type: string
+      prerelease:
+        description: "Mark the release as a pre-release"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            cmake_arch: x64
+          - arch: x86
+            cmake_arch: Win32
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch pinned dependencies
+        shell: pwsh
+        run: teamspeak-reshade-overlay/scripts/fetch-deps.ps1
+
+      - name: Configure
+        run: >
+          cmake -S teamspeak-reshade-overlay -B build-${{ matrix.arch }}
+          -A ${{ matrix.cmake_arch }}
+          -DTSRO_BUILD_PLUGIN=ON -DTSRO_BUILD_ADDON=ON -DTSRO_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build-${{ matrix.arch }} --config Release -j
+
+      # The tests are platform-independent, so a failure here is a real regression, not a
+      # Windows quirk. A release must not be cut from a build whose own tests fail.
+      - name: Test
+        run: ctest --test-dir build-${{ matrix.arch }} -C Release --output-on-failure
+
+      - name: Stage
+        shell: pwsh
+        run: |
+          $stage = "stage-${{ matrix.arch }}"
+          New-Item -ItemType Directory -Force -Path "$stage/plugin","$stage/addon","$stage/profiles","$stage/tools" | Out-Null
+          Copy-Item "build-${{ matrix.arch }}/teamspeak-plugin/Release/*.dll" "$stage/plugin/"
+          Copy-Item "build-${{ matrix.arch }}/reshade-integration/Release/TeamSpeakOverlay.addon*" "$stage/addon/"
+          Copy-Item "build-${{ matrix.arch }}/tools/config-tool/Release/tsro-config.exe" "$stage/tools/"
+          Copy-Item "teamspeak-reshade-overlay/examples/profiles/*.json" "$stage/profiles/"
+          Copy-Item "teamspeak-reshade-overlay/LICENSE" "$stage/"
+          Copy-Item "teamspeak-reshade-overlay/docs/installation.md","teamspeak-reshade-overlay/docs/uninstallation.md","teamspeak-reshade-overlay/docs/troubleshooting.md","teamspeak-reshade-overlay/docs/compatibility.md" "$stage/"
+          Get-ChildItem -Recurse $stage | Select-Object FullName, Length
+
+      - name: Record what was built
+        shell: pwsh
+        run: |
+          $stage = "stage-${{ matrix.arch }}"
+          $hashes = Get-ChildItem -Recurse -File $stage |
+            Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { "{0}  {1}" -f $_.Hash.ToLower(), (Resolve-Path -Relative $_.Path) }
+          $hashes | Out-File -Encoding utf8 "$stage/SHA256SUMS.txt"
+          Get-Content "$stage/SHA256SUMS.txt"
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "stage-${{ matrix.arch }}/*" `
+            -DestinationPath "teamspeak-reshade-overlay-${{ matrix.arch }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teamspeak-reshade-overlay-${{ matrix.arch }}
+          path: teamspeak-reshade-overlay-${{ matrix.arch }}.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Resolve the tag
+        id: tag
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write the release notes
+        shell: bash
+        run: |
+          # The status caveat is not boilerplate: these binaries are built and unit-tested by
+          # CI, but have not been run in a game against a live TeamSpeak client. Saying so in
+          # the release itself is the only place a downloader will reliably see it.
+          cat > NOTES.md <<'NOTES'
+          ## TeamSpeak ReShade Overlay
+
+          See who is in your TeamSpeak channel, and who is talking, without leaving the game.
+
+          ### Status — please read before installing
+
+          These binaries are built by CI with MSVC and pass the full automated suite (284 tests:
+          protocol, state machine, configuration, layout, notifications, and end-to-end IPC over
+          a real socket). They have **not** yet been run in a game against a live TeamSpeak
+          client by the maintainers. Treat this as a first release to try, not as battle-tested
+          software. `compatibility.md` in the archive marks every configuration **verified**,
+          **expected** or **untested**.
+
+          If something does not work, `troubleshooting.md` is symptom-first and the overlay's
+          Diagnostics tab will usually tell you the answer directly.
+
+          ### Requirements
+
+          - Windows 10 (1809+) or 11
+          - **ReShade with add-on support** — the "addon-free" download cannot load this
+          - TeamSpeak **3.6.x** (Plugin API 26). TeamSpeak 5 and 6 do not load TeamSpeak 3
+            plugins and are not supported.
+
+          ### Install
+
+          1. `plugin\tsro_overlay_win64.dll` → `%APPDATA%\TS3Client\plugins\`, then enable it in
+             TeamSpeak → Tools → Options → Addons → Plugins
+          2. `addon\TeamSpeakOverlay.addon64` → next to the game's ReShade DLL
+          3. In game: **Home** → Add-ons → TeamSpeak Overlay
+
+          Use the `x86` archive for a 32-bit game or a 32-bit TeamSpeak client. Full instructions
+          are in `installation.md`; removal is in `uninstallation.md` and is just deleting files.
+
+          ### Privacy
+
+          Neither component opens a network socket. Chat is forwarded only for the categories you
+          enable, filtered inside the plugin, and **private messages are off by default**. Chat
+          content is never written to the log unless you explicitly switch that on.
+
+          ### Verifying your download
+
+          Each archive contains `SHA256SUMS.txt` covering every file in it.
+          NOTES
+          echo "--- artifacts ---"
+          ls -la artifacts/
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "${{ steps.tag.outputs.name }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "TeamSpeak ReShade Overlay ${{ steps.tag.outputs.name }}" \
+            --notes-file NOTES.md \
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.prerelease) && '--prerelease' || '' }} \
+            artifacts/*.zip
