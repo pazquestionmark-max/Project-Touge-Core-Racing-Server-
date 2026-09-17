@@ -314,8 +314,8 @@ TEST(layout, hiding_muted_users_keeps_the_local_user) {
     UserState other = make_user("a=", "Alice");
     other.input_muted = true;
 
-    const std::vector<const UserState*> ordered =
-        order_users(connected_state({me, other}), cfg);
+    const OverlayState state = connected_state({me, other});
+    const std::vector<const UserState*> ordered = order_users(state, cfg);
     CHECK_EQ(ordered.size(), std::size_t{1});
     CHECK(ordered[0]->is_self);
 }
@@ -347,8 +347,8 @@ TEST(layout, talk_power_sorting_is_descending) {
     low.talk_power = 10;
     UserState high = make_user("b=", "High");
     high.talk_power = 100;
-    const std::vector<const UserState*> ordered =
-        order_users(connected_state({low, high}), cfg);
+    const OverlayState state = connected_state({low, high});
+    const std::vector<const UserState*> ordered = order_users(state, cfg);
     CHECK_EQ(ordered[0]->nickname, std::string("High"));
 }
 
@@ -360,8 +360,9 @@ TEST(layout, the_user_list_is_capped_and_reports_the_remainder) {
         users.push_back(make_user(("u" + std::to_string(i) + "=").c_str(),
                                   ("User" + std::to_string(i)).c_str()));
     }
-    const LayoutResult r = compute_layout(connected_state(users), cfg, Viewport{1920, 1080},
-                                          stub_measure(), 0.0f, nullptr);
+    const OverlayState state = connected_state(users);
+    const LayoutResult r =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
     CHECK_EQ(r.users.rows.size(), std::size_t{3});
     CHECK_EQ(r.users.hidden_count, 7);
     CHECK_EQ(r.users.overflow_text, std::string("+7 more"));
@@ -369,9 +370,9 @@ TEST(layout, the_user_list_is_capped_and_reports_the_remainder) {
 
 TEST(layout, rows_are_laid_out_inside_the_list_rectangle) {
     Config cfg = Config::defaults();
+    const OverlayState state = connected_state({make_user("a=", "Alice"), make_user("b=", "Bob")});
     const LayoutResult r =
-        compute_layout(connected_state({make_user("a=", "Alice"), make_user("b=", "Bob")}), cfg,
-                       Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
     CHECK_EQ(r.users.rows.size(), std::size_t{2});
     for (const auto& row : r.users.rows) {
         CHECK(row.rect.y >= r.users.rect.y - 0.01f);
@@ -385,8 +386,9 @@ TEST(layout, the_title_shows_the_parent_channel_when_configured) {
     Config cfg = Config::defaults();
     cfg.channel_title.show_parent = true;
     cfg.channel_title.show_user_count = false;
-    const LayoutResult r = compute_layout(connected_state({}), cfg, Viewport{1920, 1080},
-                                          stub_measure(), 0.0f, nullptr);
+    const OverlayState state = connected_state({});
+    const LayoutResult r =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
     CHECK(r.title.visible);
     CHECK_EQ(r.title.text, std::string("Games / Racing"));
 }
@@ -395,9 +397,9 @@ TEST(layout, the_title_shows_the_user_count_when_configured) {
     Config cfg = Config::defaults();
     cfg.channel_title.show_parent = false;
     cfg.channel_title.show_user_count = true;
+    const OverlayState state = connected_state({make_user("a=", "Alice"), make_user("b=", "Bob")});
     const LayoutResult r =
-        compute_layout(connected_state({make_user("a=", "Alice"), make_user("b=", "Bob")}), cfg,
-                       Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
     CHECK_EQ(r.title.text, std::string("Racing (2)"));
 }
 
@@ -431,8 +433,9 @@ TEST(layout, a_channel_override_restyles_the_title) {
     cfg.channel_title.show_parent = false;
     cfg.channel_title.show_user_count = false;
 
-    const LayoutResult r = compute_layout(connected_state({}), cfg, Viewport{1920, 1080},
-                                          stub_measure(), 0.0f, nullptr);
+    const OverlayState state = connected_state({});
+    const LayoutResult r =
+        compute_layout(state, cfg, Viewport{1920, 1080}, stub_measure(), 0.0f, nullptr);
     CHECK_EQ(r.title.text, std::string("Home"));
     CHECK_EQ(r.title.text_color.to_hex(), std::string("#FF00FFFF"));
 }
