@@ -22,6 +22,7 @@ const NotificationStyle& style_for(NotificationKind k, const NotificationsConfig
         case NotificationKind::Whisper: return c.whisper;
         case NotificationKind::Chat: return c.chat;
         case NotificationKind::PrivateChat: return c.private_chat;
+        case NotificationKind::Poke: return c.poke;
     }
     return c.join;
 }
@@ -98,8 +99,9 @@ void NotificationQueue::submit(const OverlayEvent& ev, const Config& cfg, std::i
             // A message sent to you personally is its own kind of event, with its own toast --
             // the first thing you need from it is who sent it, which a channel-chat toast
             // shares a format with and so cannot make obvious.
-            kind = ev.chat.category == ChatCategory::Private ? NotificationKind::PrivateChat
-                                                             : NotificationKind::Chat;
+            if (ev.chat.category == ChatCategory::Poke) kind = NotificationKind::Poke;
+            else if (ev.chat.category == ChatCategory::Private) kind = NotificationKind::PrivateChat;
+            else kind = NotificationKind::Chat;
             fv.message = ev.chat.text;
             fv.name = ev.chat.sender_name;
             // A sender TeamSpeak could not name is still better than an anonymous message.

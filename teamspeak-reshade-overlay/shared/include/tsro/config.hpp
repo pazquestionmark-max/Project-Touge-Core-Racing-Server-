@@ -347,6 +347,9 @@ struct NotificationsConfig {
     /// Private messages get their own toast. A message sent to you personally is not the same
     /// event as one sent to the channel, and the thing you need from it first is who it is from.
     NotificationStyle private_chat{};
+    /// A poke is TeamSpeak's "look at me now". It arrives through its own callback and gets its
+    /// own toast, carrying the poke message and who sent it.
+    NotificationStyle poke{};
 };
 
 struct ChatConfig {

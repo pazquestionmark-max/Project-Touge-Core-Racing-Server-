@@ -56,6 +56,7 @@ const char* to_string(ChatCategory c) noexcept {
         case ChatCategory::Channel: return "channel";
         case ChatCategory::Server: return "server";
         case ChatCategory::Private: return "private";
+        case ChatCategory::Poke: return "poke";
     }
     return "channel";
 }
@@ -94,6 +95,7 @@ bool parse_chat_category(std::string_view s, ChatCategory& out) noexcept {
     if (s == "channel") { out = ChatCategory::Channel; return true; }
     if (s == "server") { out = ChatCategory::Server; return true; }
     if (s == "private") { out = ChatCategory::Private; return true; }
+    if (s == "poke") { out = ChatCategory::Poke; return true; }
     return false;
 }
 

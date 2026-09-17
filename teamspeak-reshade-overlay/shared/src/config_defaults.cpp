@@ -232,6 +232,23 @@ NotificationStyle private_chat_notification() {
     return n;
 }
 
+NotificationStyle poke_notification() {
+    NotificationStyle n;
+    // On by default, and reached only once private messages are switched on -- a poke rides the
+    // same subscription, so until then the plugin is never asked to send one.
+    n.enabled = true;
+    n.format = "{name}: {message}";
+    n.prefix = "[POKE]";
+    n.icon = IconShape::Star;
+    n.icon_color = Color{255, 197, 132, 255};
+    n.name_color = Color{255, 197, 132, 255};
+    n.border = Color{255, 197, 132, 130};
+    // A poke is meant to interrupt; it earns a longer read than an ordinary message.
+    n.fade.hold_ms = 10000;
+    n.wrap = true;
+    return n;
+}
+
 }  // namespace
 
 Config Config::defaults() {
@@ -257,6 +274,7 @@ Config Config::defaults() {
     c.notifications.whisper = whisper_notification();
     c.notifications.chat = chat_notification();
     c.notifications.private_chat = private_chat_notification();
+    c.notifications.poke = poke_notification();
 
     return c;
 }

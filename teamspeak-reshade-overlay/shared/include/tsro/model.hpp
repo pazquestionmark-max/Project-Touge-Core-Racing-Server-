@@ -21,7 +21,10 @@ enum class ConnectionState { Disconnected, Connecting, Connected };
 
 enum class DisconnectReason { Unknown, User, Timeout, Kicked, Banned, ServerShutdown, ConnectionLost };
 
-enum class ChatCategory { Channel, Server, Private };
+/// Poke is its own category rather than a private message with a flag: it is a different
+/// event in TeamSpeak, delivered by a different callback, and it deserves its own toast. It
+/// rides the same privacy switch, because it is just as personal.
+enum class ChatCategory { Channel, Server, Private, Poke };
 
 enum class JoinCause { Moved, Connected, Disconnected, Timeout, Kicked, Banned };
 

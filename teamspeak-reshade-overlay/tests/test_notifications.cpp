@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#include "tsro/protocol.hpp"
 #include "tsro/notifications.hpp"
 #include "tsro_test.hpp"
 
@@ -420,4 +421,36 @@ TEST(notifications, the_wrap_choice_reaches_the_renderer) {
     CHECK(!q.items().front().wrap);
     CHECK(q.items().back().wrap);
     CHECK(q.items().back().max_lines >= 1);
+}
+
+TEST(notifications, a_poke_gets_its_own_toast_naming_the_sender) {
+    Config cfg = Config::defaults();
+    NotificationQueue q;
+
+    OverlayEvent e;
+    e.kind = OverlayEventKind::ChatMessage;
+    e.chat.category = ChatCategory::Poke;
+    e.chat.sender_name = "Carol";
+    e.chat.text = "get in here";
+    q.submit(e, cfg, 1000);
+
+    CHECK_EQ(q.items().size(), std::size_t{1});
+    const Notification& n = q.items().front();
+    CHECK(n.kind == NotificationKind::Poke);
+    CHECK_EQ(n.prefix, std::string("[POKE]"));
+    CHECK_EQ(n.name, std::string("Carol"));
+    CHECK(n.text.find("Carol") != std::string::npos);
+    CHECK(n.text.find("get in here") != std::string::npos);
+}
+
+TEST(notifications, a_poke_rides_the_private_message_subscription) {
+    // Turning private messages on is all it takes: a poke is just as personal, so it is gated
+    // by the same switch rather than needing one of its own.
+    proto::ConfigurationUpdatedPayload subscription;
+    subscription.chat.priv = false;
+    CHECK(!subscription.chat.enabled_for(ChatCategory::Poke));
+    subscription.chat.priv = true;
+    CHECK(subscription.chat.enabled_for(ChatCategory::Poke));
+    CHECK(subscription.chat.enabled_for(ChatCategory::Private));
+    CHECK(!subscription.chat.enabled_for(ChatCategory::Channel));
 }

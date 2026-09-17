@@ -433,6 +433,30 @@ void PluginCore::on_text_message(std::uint64_t server, TsTextTarget target,
     last_event_ = "chat_message";
 }
 
+void PluginCore::on_poke(std::uint64_t server, std::uint16_t from_client,
+                         const std::string& from_name, const std::string& from_unique_id,
+                         const std::string& message) {
+    if (!is_active_server(server) || !ipc_) return;
+
+    ChatMessage poke;
+    poke.id = next_chat_id_++;
+    poke.category = ChatCategory::Poke;
+    poke.sender_unique_id = from_unique_id;
+    poke.sender_name = from_name;
+    poke.channel_name = state_.state().channel.name;
+    poke.text = json::truncate_utf8(message, proto::kMaxChatChars);
+    poke.timestamp_ms = proto::now_unix_ms();
+
+    std::uint16_t own = 0;
+    poke.outgoing = query_.own_client_id(server, own) && own == from_client;
+
+    // broadcast_chat applies the same privacy gate a private message goes through, so a client
+    // that did not ask for them never sees one serialised.
+    ipc_->broadcast_chat(poke, state_.server_uid());
+    ++events_emitted_;
+    last_event_ = "poke";
+}
+
 void PluginCore::on_current_server_changed(std::uint64_t server) {
     if (server == active_server_) return;
     active_server_ = server;

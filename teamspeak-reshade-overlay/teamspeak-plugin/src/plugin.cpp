@@ -209,6 +209,20 @@ PLUGIN_EXPORT void ts3plugin_onConnectStatusChangeEvent(uint64 serverConnectionH
                                       errorNumber);
 }
 
+PLUGIN_EXPORT int ts3plugin_onClientPokeEvent(uint64 serverConnectionHandlerID, anyID fromClientID,
+                                              const char* pokerName,
+                                              const char* pokerUniqueIdentity, const char* message,
+                                              int ffIgnored) {
+    // Returning 0 lets the client handle the poke as it normally would -- the overlay shows it,
+    // it does not swallow it. ffIgnored means the Friend/Foe manager already suppressed it, in
+    // which case so do we.
+    if (g_core != nullptr && ffIgnored == 0) {
+        g_core->on_poke(serverConnectionHandlerID, static_cast<std::uint16_t>(fromClientID),
+                        safe(pokerName), safe(pokerUniqueIdentity), safe(message));
+    }
+    return 0;
+}
+
 PLUGIN_EXPORT void ts3plugin_onClientMoveEvent(uint64 serverConnectionHandlerID, anyID clientID,
                                                uint64 oldChannelID, uint64 newChannelID,
                                                int visibility, const char* moveMessage) {

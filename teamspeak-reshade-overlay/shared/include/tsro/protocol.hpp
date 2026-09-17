@@ -213,7 +213,11 @@ struct ChatSubscription {
         switch (c) {
             case ChatCategory::Channel: return channel;
             case ChatCategory::Server: return server;
-            case ChatCategory::Private: return priv;
+            // A poke is as personal as a private message and rides the same switch, so
+            // turning private messages on is all it takes to start receiving them.
+            case ChatCategory::Private:
+            case ChatCategory::Poke:
+                return priv;
         }
         return false;
     }

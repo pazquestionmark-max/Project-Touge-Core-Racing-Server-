@@ -257,6 +257,7 @@ TeamSpeak's Plugin API 26 actually exposes.
 | channel name / parent / topic | `CHANNEL_NAME`, `getParentChannelOfChannel`, `CHANNEL_TOPIC` | Supported |
 | server name / uid | `VIRTUALSERVER_NAME`, `VIRTUALSERVER_UNIQUE_IDENTIFIER` | Supported |
 | chat messages | `ts3plugin_onTextMessageEvent` | Supported for channel, server and private targets |
+| pokes | `ts3plugin_onClientPokeEvent` | Supported. Carried as a chat message of category `poke`, gated by the same `priv` subscription flag as a private message — a poke is just as personal, so enabling private messages is all that is needed. The callback returns 0, so the client still handles the poke as it normally would; a poke the Friend/Foe manager already suppressed is not forwarded. |
 | per-user audio level / waveform | — | **Not exposed as an analysable stream** by the plugin API in a form we are willing to use. `ts3plugin_onEditPlaybackVoiceDataEvent` does deliver PCM, but tapping the audio path to drive a decoration would add per-sample work to the voice thread. Deliberately not implemented; the speaking animation is timer-driven. |
 
 ### 6.1 What `whisper: true` means

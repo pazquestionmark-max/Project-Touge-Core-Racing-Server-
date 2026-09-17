@@ -68,6 +68,10 @@ public:
     void on_text_message(std::uint64_t server, TsTextTarget target, std::uint16_t from_client,
                          const std::string& from_name, const std::string& from_unique_id,
                          const std::string& message);
+    /// A poke: TeamSpeak's own "look at me now", delivered by its own callback and carrying its
+    /// own message. Rides the private-message subscription, being just as personal.
+    void on_poke(std::uint64_t server, std::uint16_t from_client, const std::string& from_name,
+                 const std::string& from_unique_id, const std::string& message);
     /// The user switched TeamSpeak tabs; the overlay follows the active connection.
     void on_current_server_changed(std::uint64_t server);
     void on_server_stopped(std::uint64_t server);

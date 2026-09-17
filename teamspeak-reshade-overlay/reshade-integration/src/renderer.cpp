@@ -174,6 +174,7 @@ const char* category_label(ChatCategory category) {
         case ChatCategory::Channel: return "#";
         case ChatCategory::Server: return "!";
         case ChatCategory::Private: return "@";
+        case ChatCategory::Poke: return "!";
     }
     return "#";
 }
@@ -326,6 +327,22 @@ void Renderer::seed_preview_notifications(const Config& config, std::int64_t now
     chat.chat.text = "Example chat notification";
     chat.chat.timestamp_ms = now_ms;
     notifications_.submit(chat, config, now_ms);
+
+    OverlayEvent private_message = event(OverlayEventKind::ChatMessage, "Bob", "preview-b=");
+    private_message.chat.category = ChatCategory::Private;
+    private_message.chat.sender_name = "Bob";
+    private_message.chat.sender_unique_id = "preview-b=";
+    private_message.chat.text = "Example private message";
+    private_message.chat.timestamp_ms = now_ms;
+    notifications_.submit(private_message, config, now_ms);
+
+    OverlayEvent poke = event(OverlayEventKind::ChatMessage, "Carol", "preview-c=");
+    poke.chat.category = ChatCategory::Poke;
+    poke.chat.sender_name = "Carol";
+    poke.chat.sender_unique_id = "preview-c=";
+    poke.chat.text = "Example poke message";
+    poke.chat.timestamp_ms = now_ms;
+    notifications_.submit(poke, config, now_ms);
 
     // Anything disabled in the configuration produces nothing, which is itself useful feedback:
     // an empty slot means that category is switched off, not that the preview is broken.
@@ -794,7 +811,11 @@ void Renderer::draw_chat(ImDrawList* dl, const Config& config, const Viewport& v
         const ChatMessage& message = *it;
         if (message.category == ChatCategory::Channel && !cc.show_channel_messages) continue;
         if (message.category == ChatCategory::Server && !cc.show_server_messages) continue;
-        if (message.category == ChatCategory::Private && !cc.show_private_messages) continue;
+        if ((message.category == ChatCategory::Private ||
+             message.category == ChatCategory::Poke) &&
+            !cc.show_private_messages) {
+            continue;
+        }
         if (cc.retention_seconds > 0 &&
             now_ms - message.timestamp_ms >
                 static_cast<std::int64_t>(cc.retention_seconds) * 1000) {

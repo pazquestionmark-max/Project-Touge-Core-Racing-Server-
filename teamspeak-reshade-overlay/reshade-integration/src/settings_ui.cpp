@@ -823,6 +823,7 @@ void SettingsUi::tab_notifications(Config& config, SettingsActions& actions) {
                                                   "Placeholders: {name} {message} {channel}");
     actions.config_changed |= notification_editor("Private message", n.private_chat,
                                                   "Placeholders: {name} {message}");
+    actions.config_changed |= notification_editor("Poke", n.poke, "Placeholders: {name} {message}");
 }
 
 void SettingsUi::tab_chat(Config& config, SettingsActions& actions) {
@@ -1527,6 +1528,9 @@ void SettingsUi::basic_view(Config& config, const LinkDiagnostics& diagnostics,
             help("A message sent to you personally gets its own toast, naming the sender. This "
                  "also needs private messages switched on under Chat -- with them off the "
                  "plugin is never asked for them at all.");
+            actions.config_changed |= ImGui::Checkbox("Pokes##notif", &n.poke.enabled);
+            help("A poke gets a [POKE] toast with the message and who sent it. Pokes ride the "
+                 "same switch as private messages, so turning those on is all it takes.");
         }
     }
 
