@@ -187,8 +187,10 @@ NotificationStyle connection_notification() {
 
 NotificationStyle whisper_notification() {
     NotificationStyle n;
-    n.enabled = false;  // opt-in: whisper bursts are frequent enough to be intrusive
-    n.format = "{name} is whispering";
+    // On: a whisper is aimed at you personally and usually comes from a channel you cannot
+    // see, so the overlay is often the only place it is visible at all.
+    n.enabled = true;
+    n.format = "{name} is whispering from {channel}";
     n.prefix = "[w]";
     n.icon = IconShape::Whisper;
     n.icon_color = kWhisperCyan;

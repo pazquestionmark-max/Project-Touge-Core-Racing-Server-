@@ -347,6 +347,8 @@ json::Value encode(const WhisperChangedPayload& p) {
     put_identity(o, p.client_id, p.unique_id);
     o.set("direction", json::Value(p.direction));
     o.set("active", json::Value(p.active));
+    if (!p.display_name.empty()) o.set("display_name", json::Value(p.display_name));
+    o.set("from_channel", json::Value(p.from_channel));
     return o;
 }
 
@@ -356,6 +358,8 @@ bool decode(const json::Value& v, WhisperChangedPayload& p) {
     // v1 defines only the incoming direction; anything else is a peer we do not understand.
     if (p.direction != "incoming") return false;
     p.active = v.get_bool("active");
+    p.display_name = v.get_string("display_name");
+    p.from_channel = v.get_bool("from_channel");
     return true;
 }
 

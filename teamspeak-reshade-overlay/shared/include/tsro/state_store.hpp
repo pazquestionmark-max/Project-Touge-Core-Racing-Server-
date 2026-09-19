@@ -45,6 +45,8 @@ struct OverlayEvent {
     std::string unique_id;
     std::string display_name;
     std::string channel_name;
+    /// For a whisper: whether the whisperer was in your channel.
+    bool from_channel = false;
     std::string previous_channel_name;
     int user_count = 0;
     ConnectionState connection = ConnectionState::Disconnected;

@@ -524,6 +524,8 @@ json::Value Config::to_json() const {
         o.set("channel_switch", write(n.channel_switch));
         o.set("connection", write(n.connection));
         o.set("whisper", write(n.whisper));
+        o.set("whisper_from_channel", json::Value(n.whisper_from_channel));
+        o.set("whisper_from_elsewhere", json::Value(n.whisper_from_elsewhere));
         o.set("chat", write(n.chat));
         o.set("private_chat", write(n.private_chat));
         o.set("poke", write(n.poke));
@@ -772,6 +774,8 @@ Config Config::from_json(const json::Value& root, ConfigDiagnostics& diag) {
         read(n.sub("channel_switch"), x.channel_switch);
         read(n.sub("connection"), x.connection);
         read(n.sub("whisper"), x.whisper);
+        n.b("whisper_from_channel", x.whisper_from_channel);
+        n.b("whisper_from_elsewhere", x.whisper_from_elsewhere);
         read(n.sub("chat"), x.chat);
         read(n.sub("private_chat"), x.private_chat);
         read(n.sub("poke"), x.poke);

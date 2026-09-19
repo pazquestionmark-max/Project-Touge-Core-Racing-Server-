@@ -834,8 +834,14 @@ void SettingsUi::tab_notifications(Config& config, SettingsActions& actions) {
                                                   "Placeholders: {channel} {previous} {count}");
     actions.config_changed |= notification_editor("Connection events", n.connection,
                                                   "Placeholders: {status} {server}");
-    actions.config_changed |= notification_editor("Someone whispers you", n.whisper,
-                                                  "Placeholders: {name}");
+    actions.config_changed |= notification_editor(
+        "Someone whispers you", n.whisper,
+        "Placeholders: {name} {channel}. {channel} reads \"your channel\" or \"another "
+        "channel\": the plugin API never tells the receiver which whisper list was used, so "
+        "individual, group and Channel Commander whispers cannot be distinguished.");
+    actions.config_changed |= ImGui::Checkbox("Whispers from your channel", &n.whisper_from_channel);
+    actions.config_changed |=
+        ImGui::Checkbox("Whispers from another channel", &n.whisper_from_elsewhere);
     actions.config_changed |= notification_editor("Chat message", n.chat,
                                                   "Placeholders: {name} {message} {channel}");
     actions.config_changed |= notification_editor("Private message", n.private_chat,
@@ -1551,6 +1557,18 @@ void SettingsUi::basic_view(Config& config, const LinkDiagnostics& diagnostics,
             actions.config_changed |= ImGui::Checkbox("Channel moves", &n.channel_switch.enabled);
             actions.config_changed |= ImGui::Checkbox("Connection changes", &n.connection.enabled);
             actions.config_changed |= ImGui::Checkbox("Whispers", &n.whisper.enabled);
+            if (n.whisper.enabled) {
+                ImGui::Indent();
+                actions.config_changed |=
+                    ImGui::Checkbox("From your channel", &n.whisper_from_channel);
+                actions.config_changed |=
+                    ImGui::Checkbox("From another channel", &n.whisper_from_elsewhere);
+                help("TeamSpeak tells the receiving client only that a whisper arrived, never "
+                     "which whisper list the sender used, so an individual, a group and a "
+                     "Channel Commander whisper cannot be told apart here. Where it came from "
+                     "can, and that is the split offered.");
+                ImGui::Unindent();
+            }
             actions.config_changed |= ImGui::Checkbox("Channel chat", &n.chat.enabled);
             if (ImGui::Checkbox("Private messages##notif", &n.private_chat.enabled)) {
                 actions.config_changed = true;

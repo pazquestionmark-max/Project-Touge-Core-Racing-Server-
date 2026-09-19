@@ -104,7 +104,12 @@ void NotificationQueue::submit(const OverlayEvent& ev, const Config& cfg, std::i
             fv.status = connection_word(ev.connection, ev.reason);
             if (ev.connection == ConnectionState::Connected) connected_at_ms_ = now_ms;
             break;
-        case OverlayEventKind::WhisperStarted: kind = NotificationKind::Whisper; break;
+        case OverlayEventKind::WhisperStarted:
+            kind = NotificationKind::Whisper;
+            if (ev.from_channel && !nc.whisper_from_channel) return;
+            if (!ev.from_channel && !nc.whisper_from_elsewhere) return;
+            fv.channel = ev.from_channel ? "your channel" : "another channel";
+            break;
         case OverlayEventKind::ChatMessage:
             // A message sent to you personally is its own kind of event, with its own toast --
             // the first thing you need from it is who sent it, which a channel-chat toast
